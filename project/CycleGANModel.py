@@ -1,49 +1,115 @@
+import itertools
 import torch
 import os
+from torch import nn
+
+from project import StyleGAN3
+from project.StyleGAN3 import StyleGAN3_Generator, StyleGAN3_Discriminator
+from project.utils.image_pool import ImagePool
+
+
+class Generator(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+
+        #IMPEMENTARE QUI IL GENERATORE DI STYLEGAN3
+        self.conv = nn.Sequential()
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+class Discriminator(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+
+        #IMPLEMENTARE QUI IL DISCRIMINATORE DI STYLEGAN3
+        self.main = nn.Sequential( )
+
+    def forward(self, input):
+        return self.main(input)
+
+
+#queste due sono da sistemare
+def LSGAN_D(real, fake):
+  return (torch.mean((real - 1)**2) + torch.mean(fake**2))
+
+def LSGAN_G(fake):
+  return  torch.mean((fake - 1)**2)
+
 
 class CycleGANModel():
-    """Initialize the BaseModel class.
-            Parameters:
-                opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
-            When creating your custom class, you need to implement your own initialization.
-            In this function, you should first call <BaseModel.__init__(self, opt)>
-            Then, you need to define four lists:
-                -- self.loss_names (str list):          specify the training losses that you want to plot and save.
-                -- self.model_names (str list):         define networks used in our training.
-                -- self.visual_names (str list):        specify the images that you want to display and save.
-                -- self.optimizers (optimizer list):    define and initialize optimizers. You can define one optimizer for each network. If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
 
-    Add new dataset-specific options, and rewrite default values for existing options.
-            Parameters:
-                parser          -- original option parser
-                is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
-            Returns:
-                the modified parser.
-            For CycleGAN, in addition to GAN losses, we introduce lambda_A, lambda_B, and lambda_identity for the following losses.
-            A (source domain), B (target domain).
-            Generators: G_A: A -> B; G_B: B -> A.
-            Discriminators: D_A: G_A(A) vs. B; D_B: G_B(B) vs. A.
-            Forward cycle loss:  lambda_A * ||G_B(G_A(A)) - A|| (Eqn. (2) in the paper)
-            Backward cycle loss: lambda_B * ||G_A(G_B(B)) - B|| (Eqn. (2) in the paper)
-            Identity loss (optional): lambda_identity * (||G_A(B) - B|| * lambda_B + ||G_B(A) - A|| * lambda_A) (Sec 5.2 "Photo generation from paintings" in the paper)
-            Dropout is not used in the original CycleGAN paper.
+    """
+    Generators: G_A: A -> B; G_B: B -> A.
+    Discriminators: D_A: G_A(A) vs. B; D_B: G_B(B) vs. A
+    adversarial loss: style3gan loss --> questa parte è ancora da vedere
+    Forward cycle loss:  lambda_A * ||G_B(G_A(A)) - A||
+    Backward cycle loss: lambda_B * ||G_A(G_B(B)) - B||
+    cycle loss: forward cycle loss + backward cycle loss
+    final loss: adversarial loss_A + aversarial loss_b + cycle loss
+
     """
 
+#RIVEDI ALCUNE COSE DEL METODO INIT
 
-    def __init__(self, opt):
+    def __init__(self, opt): #credo che opt siano parametri opzionali, quando istanzio la classe posso passarli o meno
         super(CycleGANModel, self).__init__()
-        self.opt = opt
+
+        #cerca di fare questo senza opt
+        self.opt=opt
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
         self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device(
-        'cpu')  # get device name: CPU or GPU
+            'cpu')  # get device name: CPU or GPU
         self.save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
-        if opt.preprocess != 'scale_width':  # with [scale_width], input images might have different sizes, which hurts the performance of cudnn.benchmark.
-            torch.backends.cudnn.benchmark = True
-        self.loss_names = []
-        self.model_names = []
-        self.visual_names = []
         self.optimizers = []
         self.image_paths = []
-        self.metric = 0  # used for learning rate policy 'plateau'
+
+
+        #define generators
+        self.G_A = StyleGAN3_Generator()
+        self.G_B = StyleGAN3_Generator()
+
+        if self.isTrain:  # define discriminators
+            self.D_A = StyleGAN3_Discriminator()
+            self.D_B = StyleGAN3_Discriminator()
+
+        if self.isTrain:
+
+            self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+            self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+
+            # define loss functions
+            self.criterionGAN = StyleGAN3.GANLoss().to(self.device)  # define GAN loss.
+            self.criterionCycle = torch.nn.L1Loss()
+
+
+
+            #questa roba non l'ho capita bene
+            # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
+            self.optimizer_G = torch.optim.Adam(itertools.chain(self.G_A.parameters(), self.G_B.parameters()),
+                                                lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D = torch.optim.Adam(itertools.chain(self.D_A.parameters(), self.D_B.parameters()),
+                                                lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizers.append(self.optimizer_G)
+            self.optimizers.append(self.optimizer_D)
+
+    def set_input(self, input): #RIFAI QUESTA COERENTE CON LA NOSTRA POLITICA DI GESTIONE DELL'INPUT E IL NOSTRO DATASET
+        """Unpack input data from the dataloader and perform necessary pre-processing steps.
+        Parameters:
+            input (dict): include the data itself and its metadata information.
+        The option 'direction' can be used to swap domain A and domain B.
+        """
+        AtoB = self.opt.direction == 'AtoB'
+        self.real_A = input['A' if AtoB else 'B'].to(self.device)
+        self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        self.image_paths = input['A_paths' if AtoB else 'B_paths']
+
+    def forward(self):
+        """Run forward pass; called by both functions <optimize_parameters> and <test>."""
+        self.fake_B = self.G_A(self.real_A)  # G_A(A)
+        self.rec_A = self.G_B(self.fake_B)  # G_B(G_A(A))
+        self.fake_A = self.G_B(self.real_B)  # G_B(B)
+        self.rec_B = self.G_A(self.fake_A)  # G_A(G_B(B))
 
