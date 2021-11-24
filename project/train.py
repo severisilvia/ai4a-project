@@ -9,10 +9,10 @@ import torch
 from project.StyleGAN3 import StyleGAN3_Generator, StyleGAN3_Discriminator
 
 #cerca di capire queste funzioni a cosa servono
-from project.utils import ReplayBuffer
-from project.utils import LambdaLR
-from project.utils import Logger
-from project.utils import weights_init_normal
+from project.utils.utils import ReplayBuffer
+from project.utils.utils import LambdaLR
+from project.utils.utils import Logger
+from project.utils.utils import weights_init_normal
 from project.dataset import ImageDataset
 
 parser = argparse.ArgumentParser()
