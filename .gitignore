@@ -1,4 +1,6 @@
 dataset/
 project/.idea
-project/__pychache__
+project/__pycache__
+.idea/
+__pycache__/
 
