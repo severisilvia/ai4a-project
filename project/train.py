@@ -9,14 +9,14 @@ import torch
 from project.StyleGAN3 import Generator
 from project.StyleGAN2 import Discriminator
 
-#cerca di capire queste funzioni a cosa servono
+# cerca di capire queste funzioni a cosa servono
 from project.utils.utils import ReplayBuffer
 from project.utils.utils import LambdaLR
 from project.utils.utils import Logger
 from project.utils.utils import weights_init_normal
 from project.dataset import ImageDataset
 
-#Per costruire i dizionari da mandare come argomenti del training
+# Per costruire i dizionari da mandare come argomenti del training
 from project.utils.utils import EasyDict
 
 parser = argparse.ArgumentParser()
@@ -33,50 +33,46 @@ parser.add_argument('--output_nc', type=int, default=3, help='number of channels
 parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
-#Parsing roba per StyleGAN3
+# Parsing roba per StyleGAN3
 parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str, default='stylegan3-t' )
 parser.add_argument('--cbase', help='Capacity multiplier', type=int, default=32768)
 parser.add_argument('--cmax',  help='Max. feature maps', type=int, default=512)
 parser.add_argument('--map-depth', help='Mapping network depth  [default: varies]', type=int, default=2)
 parser.add_argument('--freezed', help='Freeze first layers of D', type=int, default=0)
 parser.add_argument('--mbstd-group', help='Minibatch std group size', type=int, default=4)
+parser.add_argument('--label_dim', help='Number of labels', type=int, default=2)
+parser.add_argument('--resolution', help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously', type=int, default=4)
+parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=4)
 opt = parser.parse_args()
 print(opt)
 
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-#Costruzione argomenti per istanziare modelli
+# Costruzione argomenti per istanziare modelli
 # Initialize config.
 G_kwargs = EasyDict(class_name=None, z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
 D_kwargs = EasyDict(class_name='training.networks_stylegan2.Discriminator', block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
-
-# Hyperparameters & settings. ---> BRANDON- RIPARTI DA QUI, devi sistemare parsing argomenti aggiungendo quelli che ti servono per costruire qui gli argomenti per i modelli
+# Hyperparameters & settings.
 batch_size = opt.batchSize
 G_kwargs.channel_base = D_kwargs.channel_base = opt.cbase
 G_kwargs.channel_max = D_kwargs.channel_max = opt.cmax
 G_kwargs.mapping_kwargs.num_layers = 2 if opt.map_depth is None else opt.map_depth
 D_kwargs.block_kwargs.freeze_layers = opt.freezed
 D_kwargs.epilogue_kwargs.mbstd_group_size = opt.mbstd_group
-#metrics = opts.metrics
-
-
-
+# metrics = opts.metrics
 # Base configuration.
 ema_kimg = batch_size * 10 / 32
 G_kwargs.class_name = 'training.networks_stylegan3.Generator'
-G_kwargs.magnitude_ema_beta = 0.5 ** (c.batch_size / (20 * 1e3))
-if opts.cfg == 'stylegan3-r':
-    G_kwargs.conv_kernel = 1 # Use 1x1 convolutions.
-    G_kwargs.channel_base *= 2 # Double the number of feature maps.
+G_kwargs.magnitude_ema_beta = 0.5 ** (batch_size / (20 * 1e3))
+if opt.cfg == 'stylegan3-r':
+    G_kwargs.conv_kernel = 1  # Use 1x1 convolutions.
+    G_kwargs.channel_base *= 2  # Double the number of feature maps.
     G_kwargs.channel_max *= 2
-    G_kwargs.use_radial_filters = True # Use radially symmetric downsampling filters.
-    loss_kwargs.blur_init_sigma = 10 # Blur the images seen by the discriminator.
-    loss_kwargs.blur_fade_kimg = c.batch_size * 200 / 32 # Fade out the blur during the first N kimg.
+    G_kwargs.use_radial_filters = True  # Use radially symmetric downsampling filters.
+common_kwargs = dict(c_dim=opt.label_dim, img_resolution=opt.resolution, img_channels=opt.num_channels)
 
-
-
-###### Definition of variables ######
+# ##### Definition of variables ##### #
 
 # Generators
 """     
@@ -133,8 +129,8 @@ if opts.cfg == 'stylegan3-r':
             }
 """
 
-netG_A2B = Generator(**G_kwargs)
-netG_B2A = Generator(**G_kwargs)
+netG_A2B = Generator(**G_kwargs, **common_kwargs)
+netG_B2A = Generator(**G_kwargs, **common_kwargs)
 
 # Discriminators
 """     
@@ -167,7 +163,7 @@ netD_A.apply(weights_init_normal)
 netD_B.apply(weights_init_normal)
 
 # Lossess
-criterion_GAN = torch.nn.MSELoss() #VEDI SE VA BENE
+criterion_GAN = torch.nn.MSELoss()  # VEDI SE VA BENE
 criterion_cycle = torch.nn.L1Loss()
 criterion_identity = torch.nn.L1Loss()
 
@@ -207,7 +203,7 @@ dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unal
 logger = Logger(opt.n_epochs, len(dataloader))
 
 
-###### Training ######
+# ##### Training ######
 for epoch in range(opt.epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
         # Set model input
@@ -248,7 +244,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         optimizer_G.step()
         ###################################
 
-        ###### Discriminator A ######
+        # ##### Discriminator A ######
         optimizer_D_A.zero_grad()
 
         # Real loss
@@ -267,7 +263,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         optimizer_D_A.step()
         ###################################
 
-        ###### Discriminator B ######
+        # ##### Discriminator B ######
         optimizer_D_B.zero_grad()
 
         # Real loss

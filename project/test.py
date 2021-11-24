@@ -29,8 +29,8 @@ if torch.cuda.is_available() and not opt.cuda:
 
 ###### Definition of variables ######
 # Networks
-netG_A2B = Generator(opt.input_nc, opt.output_nc)
-netG_B2A = Generator(opt.output_nc, opt.input_nc)
+netG_A2B = Generator(**G_kwargs, **common_kwargs)
+netG_B2A = Generator(**G_kwargs, **common_kwargs)
 
 if opt.cuda:
     netG_A2B.cuda()
