@@ -14,11 +14,11 @@ import numpy as np
 import scipy.signal
 import scipy.optimize
 import torch
-from utils.torch_utils import misc
-from utils.torch_utils import persistence
-from utils.torch_utils.ops import conv2d_gradfix
-from utils.torch_utils.ops import filtered_lrelu
-from utils.torch_utils.ops import bias_act
+from project.utils.torch_utils import misc
+from project.utils.torch_utils import persistence
+from project.utils.torch_utils.ops import conv2d_gradfix
+from project.utils.torch_utils.ops import filtered_lrelu
+from project.utils.torch_utils.ops import bias_act
 
 #----------------------------------------------------------------------------
 
