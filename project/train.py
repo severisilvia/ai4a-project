@@ -36,9 +36,38 @@ if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 ###### Definition of variables ######
-# Networks
+
+# Generators
+"""     
+        FOR THE GENERATOR:
+        z_dim,                      # Input latent (Z) dimensionality.
+        c_dim,                      # Conditioning label (C) dimensionality.
+        w_dim,                      # Intermediate latent (W) dimensionality.
+        img_resolution,             # Output resolution.
+        img_channels,               # Number of output color channels.
+        mapping_kwargs      = {},   # Arguments for MappingNetwork.
+        **synthesis_kwargs,         # Arguments for SynthesisNetwork.
+"""
+
 netG_A2B = Generator(opt.input_nc, opt.output_nc) #correggi i parametri mettendo quelli giusti per il generatore
 netG_B2A = Generator(opt.output_nc, opt.input_nc)
+
+# Discriminators
+"""     
+        FOR THE DISCRIMINATOR:
+        c_dim,                          # Conditioning label (C) dimensionality.
+        img_resolution,                 # Input resolution.
+        img_channels,                   # Number of input color channels.
+        architecture        = 'resnet', # Architecture: 'orig', 'skip', 'resnet'.
+        channel_base        = 32768,    # Overall multiplier for the number of channels.
+        channel_max         = 512,      # Maximum number of channels in any layer.
+        num_fp16_res        = 4,        # Use FP16 for the N highest resolutions.
+        conv_clamp          = 256,      # Clamp the output of convolution layers to +-X, None = disable clamping.
+        cmap_dim            = None,     # Dimensionality of mapped conditioning label, None = default.
+        block_kwargs        = {},       # Arguments for DiscriminatorBlock.
+        mapping_kwargs      = {},       # Arguments for MappingNetwork.
+        epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
+"""
 netD_A = Discriminator(opt.input_nc)
 netD_B = Discriminator(opt.output_nc)
 
