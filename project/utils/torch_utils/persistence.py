@@ -20,7 +20,7 @@ import inspect
 import copy
 import uuid
 import types
-import dnnlib
+from project.utils.utils import EasyDict
 
 #----------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ def persistent_class(orig_class):
 
         @property
         def init_kwargs(self):
-            return dnnlib.EasyDict(copy.deepcopy(self._init_kwargs))
+            return EasyDict(copy.deepcopy(self._init_kwargs))
 
         def __reduce__(self):
             fields = list(super().__reduce__())
@@ -180,8 +180,8 @@ def _reconstruct_persistent_obj(meta):
     r"""Hook that is called internally by the `pickle` module to unpickle
     a persistent object.
     """
-    meta = dnnlib.EasyDict(meta)
-    meta.state = dnnlib.EasyDict(meta.state)
+    meta = EasyDict(meta)
+    meta.state = EasyDict(meta.state)
     for hook in _import_hooks:
         meta = hook(meta)
         assert meta is not None

@@ -51,8 +51,8 @@ if torch.cuda.is_available() and not opt.cuda:
 
 # Costruzione argomenti per istanziare modelli
 # Initialize config.
-G_kwargs = EasyDict(class_name=None, z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
-D_kwargs = EasyDict(class_name='training.networks_stylegan2.Discriminator', block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
+G_kwargs = EasyDict(z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
+D_kwargs = EasyDict(block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
 # Hyperparameters & settings.
 batch_size = opt.batchSize
 G_kwargs.channel_base = D_kwargs.channel_base = opt.cbase
@@ -62,7 +62,6 @@ D_kwargs.block_kwargs.freeze_layers = opt.freezed
 D_kwargs.epilogue_kwargs.mbstd_group_size = opt.mbstd_group
 # metrics = opts.metrics
 # Base configuration.
-G_kwargs.class_name = 'training.networks_stylegan3.Generator'
 G_kwargs.magnitude_ema_beta = 0.5 ** (batch_size / (20 * 1e3))
 if opt.cfg == 'stylegan3-r':
     G_kwargs.conv_kernel = 1  # Use 1x1 convolutions.
