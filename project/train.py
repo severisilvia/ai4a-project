@@ -1,5 +1,6 @@
 import argparse
 import itertools
+import click #to parse parameters in a smarter way
 
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
@@ -15,6 +16,9 @@ from project.utils.utils import LambdaLR
 from project.utils.utils import Logger
 from project.utils.utils import weights_init_normal
 from project.dataset import ImageDataset
+
+#Per costruire i dizionari da mandare come argomenti del training
+from project.utils.utils import EasyDict
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
@@ -45,12 +49,63 @@ if torch.cuda.is_available() and not opt.cuda:
         w_dim,                      # Intermediate latent (W) dimensionality.
         img_resolution,             # Output resolution.
         img_channels,               # Number of output color channels.
-        mapping_kwargs      = {},   # Arguments for MappingNetwork.
-        **synthesis_kwargs,         # Arguments for SynthesisNetwork.
+        mapping_kwargs      = {
+                z_dim,                      # Input latent (Z) dimensionality.
+                c_dim,                      # Conditioning label (C) dimensionality, 0 = no labels.
+                w_dim,                      # Intermediate latent (W) dimensionality.
+                num_ws,                     # Number of intermediate latents to output.
+                num_layers      = 2,        # Number of mapping layers.
+                lr_multiplier   = 0.01,     # Learning rate multiplier for the mapping layers.
+                w_avg_beta      = 0.998,    # Decay for tracking the moving average of W during training.
+            },   # Arguments for MappingNetwork. Di default è vuoto {}
+        **synthesis_kwargs = {      #arguments for SynthesisNetwork
+                channel_base        = 32768,    # Overall multiplier for the number of channels.
+                channel_max         = 512,      # Maximum number of channels in any layer.
+                num_layers          = 14,       # Total number of layers, excluding Fourier features and ToRGB.
+                num_critical        = 2,        # Number of critically sampled layers at the end.
+                first_cutoff        = 2,        # Cutoff frequency of the first layer (f_{c,0}).
+                first_stopband      = 2**2.1,   # Minimum stopband of the first layer (f_{t,0}).
+                last_stopband_rel   = 2**0.3,   # Minimum stopband of the last layer, expressed relative to the cutoff.
+                margin_size         = 10,       # Number of additional pixels outside the image.
+                output_scale        = 0.25,     # Scale factor for the output image.
+                num_fp16_res        = 4,        # Use FP16 for the N highest resolutions.
+                **layer_kwargs = {              # Arguments for SynthesisLayer.
+                        is_torgb,                       # Is this the final ToRGB layer?
+                        is_critically_sampled,          # Does this layer use critical sampling?
+                        use_fp16,                       # Does this layer use FP16?
+                
+                        # Input & output specifications.
+                        in_channels,                    # Number of input channels.
+                        out_channels,                   # Number of output channels.
+                        in_size,                        # Input spatial size: int or [width, height].
+                        out_size,                       # Output spatial size: int or [width, height].
+                        in_sampling_rate,               # Input sampling rate (s).
+                        out_sampling_rate,              # Output sampling rate (s).
+                        in_cutoff,                      # Input cutoff frequency (f_c).
+                        out_cutoff,                     # Output cutoff frequency (f_c).
+                        in_half_width,                  # Input transition band half-width (f_h).
+                        out_half_width,                 # Output Transition band half-width (f_h).
+                
+                        # Hyperparameters.
+                        conv_kernel         = 3,        # Convolution kernel size. Ignored for final the ToRGB layer.
+                        filter_size         = 6,        # Low-pass filter size relative to the lower resolution when up/downsampling.
+                        lrelu_upsampling    = 2,        # Relative sampling rate for leaky ReLU. Ignored for final the ToRGB layer.
+                        use_radial_filters  = False,    # Use radially symmetric downsampling filter? Ignored for critically sampled layers.
+                        conv_clamp          = 256,      # Clamp the output to [-X, +X], None = disable clamping.
+                        magnitude_ema_beta  = 0.999,    # Decay rate for the moving average of input magnitudes.
+            }
 """
+#Costruzione argomenti Generatore
+G_kwargs = EasyDict(z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
+G_kwargs.channel_base = c.D_kwargs.channel_base = opts.cbase
+G_kwargs.channel_max = c.D_kwargs.channel_max = opts.cmax
+G_kwargs.mapping_kwargs.num_layers = (8 if opts.cfg == 'stylegan2' else 2) if opts.map_depth is None else opts.map_depth
 
-netG_A2B = Generator(opt.input_nc, opt.output_nc) #correggi i parametri mettendo quelli giusti per il generatore
-netG_B2A = Generator(opt.output_nc, opt.input_nc)
+
+
+#Creazione modelli
+netG_A2B = Generator(**G_kwargs)
+netG_B2A = Generator(**G_kwargs)
 
 # Discriminators
 """     
