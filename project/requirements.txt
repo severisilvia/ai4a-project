@@ -3,4 +3,3 @@ numpy
 torchvision
 visdom
 scipy
-torch_utils
