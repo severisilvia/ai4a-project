@@ -39,6 +39,59 @@ print(opt)
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+#Costruzione argomenti per istanziare modelli
+# Initialize config.
+G_kwargs = EasyDict(class_name=None, z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
+D_kwargs = EasyDict(class_name='training.networks_stylegan2.Discriminator', block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
+
+# Training set. -->Penso si possa eliminare ma aspetto di vedere se serve sotto qualcosa
+training_set_kwargs, dataset_name = init_dataset_kwargs(data=opts.data)
+if opts.cond and not c.training_set_kwargs.use_labels:
+    raise click.ClickException('--cond=True requires labels specified in dataset.json')
+training_set_kwargs.use_labels = opts.cond
+training_set_kwargs.xflip = opts.mirror
+
+# Hyperparameters & settings. --->  BRANDON- RIPARTI DA QUI, devi sistemare parsing argomenti aggiungendo quelli che ti servono per costruire qui gli argomenti per i modelli
+batch_size = opt.batchSize
+G_kwargs.channel_base = D_kwargs.channel_base = opts.cbase
+G_kwargs.channel_max = D_kwargs.channel_max = opts.cmax
+G_kwargs.mapping_kwargs.num_layers = (8 if opts.cfg == 'stylegan2' else 2) if opts.map_depth is None else opts.map_depth
+D_kwargs.block_kwargs.freeze_layers = opts.freezed
+D_kwargs.epilogue_kwargs.mbstd_group_size = opts.mbstd_group
+loss_kwargs.r1_gamma = opts.gamma
+G_opt_kwargs.lr = (0.002 if opts.cfg == 'stylegan2' else 0.0025) if opts.glr is None else opts.glr
+D_opt_kwargs.lr = opts.dlr
+metrics = opts.metrics
+total_kimg = opts.kimg
+kimg_per_tick = opts.tick
+image_snapshot_ticks = c.network_snapshot_ticks = opts.snap
+random_seed = c.training_set_kwargs.random_seed = opts.seed
+data_loader_kwargs.num_workers = opts.workers
+
+# Sanity checks.
+if c.batch_size % c.num_gpus != 0:
+    raise click.ClickException('--batch must be a multiple of --gpus')
+if c.batch_size % (c.num_gpus * c.batch_gpu) != 0:
+    raise click.ClickException('--batch must be a multiple of --gpus times --batch-gpu')
+if c.batch_gpu < c.D_kwargs.epilogue_kwargs.mbstd_group_size:
+    raise click.ClickException('--batch-gpu cannot be smaller than --mbstd')
+if any(not metric_main.is_valid_metric(metric) for metric in c.metrics):
+    raise click.ClickException('\n'.join(['--metrics can only contain the following values:'] + metric_main.list_valid_metrics()))
+
+# Base configuration.
+ema_kimg = batch_size * 10 / 32
+G_kwargs.class_name = 'training.networks_stylegan3.Generator'
+G_kwargs.magnitude_ema_beta = 0.5 ** (c.batch_size / (20 * 1e3))
+if opts.cfg == 'stylegan3-r':
+    G_kwargs.conv_kernel = 1 # Use 1x1 convolutions.
+    G_kwargs.channel_base *= 2 # Double the number of feature maps.
+    G_kwargs.channel_max *= 2
+    G_kwargs.use_radial_filters = True # Use radially symmetric downsampling filters.
+    loss_kwargs.blur_init_sigma = 10 # Blur the images seen by the discriminator.
+    loss_kwargs.blur_fade_kimg = c.batch_size * 200 / 32 # Fade out the blur during the first N kimg.
+
+
+
 ###### Definition of variables ######
 
 # Generators
@@ -95,15 +148,7 @@ if torch.cuda.is_available() and not opt.cuda:
                         magnitude_ema_beta  = 0.999,    # Decay rate for the moving average of input magnitudes.
             }
 """
-#Costruzione argomenti Generatore
-G_kwargs = EasyDict(z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
-G_kwargs.channel_base = c.D_kwargs.channel_base = opts.cbase
-G_kwargs.channel_max = c.D_kwargs.channel_max = opts.cmax
-G_kwargs.mapping_kwargs.num_layers = (8 if opts.cfg == 'stylegan2' else 2) if opts.map_depth is None else opts.map_depth
 
-
-
-#Creazione modelli
 netG_A2B = Generator(**G_kwargs)
 netG_B2A = Generator(**G_kwargs)
 
