@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import torch
 
 from project.dataset import ImageDataset
-from project.StyleGAN3 import StyleGAN3_Generator
+from project.StyleGAN3 import Generator
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
@@ -29,8 +29,8 @@ if torch.cuda.is_available() and not opt.cuda:
 
 ###### Definition of variables ######
 # Networks
-netG_A2B = StyleGAN3_Generator(opt.input_nc, opt.output_nc)
-netG_B2A = StyleGAN3_Generator(opt.output_nc, opt.input_nc)
+netG_A2B = Generator(opt.input_nc, opt.output_nc)
+netG_B2A = Generator(opt.output_nc, opt.input_nc)
 
 if opt.cuda:
     netG_A2B.cuda()

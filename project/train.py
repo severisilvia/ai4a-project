@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from PIL import Image
 import torch
-from project.StyleGAN3 import StyleGAN3_Generator, StyleGAN3_Discriminator
+from project.StyleGAN3 import Generator
+from project.StyleGAN2 import Discriminator
 
 #cerca di capire queste funzioni a cosa servono
 from project.utils.utils import ReplayBuffer
@@ -36,10 +37,10 @@ if torch.cuda.is_available() and not opt.cuda:
 
 ###### Definition of variables ######
 # Networks
-netG_A2B = StyleGAN3_Generator(opt.input_nc, opt.output_nc) #correggi i parametri mettendo quelli giusti per il generatore 
-netG_B2A = StyleGAN3_Generator(opt.output_nc, opt.input_nc)
-netD_A = StyleGAN3_Discriminator(opt.input_nc)
-netD_B = StyleGAN3_Discriminator(opt.output_nc)
+netG_A2B = Generator(opt.input_nc, opt.output_nc) #correggi i parametri mettendo quelli giusti per il generatore
+netG_B2A = Generator(opt.output_nc, opt.input_nc)
+netD_A = Discriminator(opt.input_nc)
+netD_B = Discriminator(opt.output_nc)
 
 if opt.cuda:
     netG_A2B.cuda()
