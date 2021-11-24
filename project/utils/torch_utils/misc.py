@@ -105,7 +105,7 @@ def profiled_function(fn):
     return decorator
 
 #----------------------------------------------------------------------------
-# Sampler for torch.utils.data.DataLoader that loops over the dataset
+# Sampler for torch.utils.data.DataLoader that loops over the datasets
 # indefinitely, shuffling items as it goes.
 
 class InfiniteSampler(torch.utils.data.Sampler):
