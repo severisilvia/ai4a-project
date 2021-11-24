@@ -55,7 +55,7 @@ netG_B2A = Generator(opt.output_nc, opt.input_nc)
 # Discriminators
 """     
         FOR THE DISCRIMINATOR:
-        c_dim,                          # Conditioning label (C) dimensionality.
+        c_dim,                          # Conditioning label (C) dimensionality. Nel codice lo inizializza così --> c_dim=training_set.label_dim
         img_resolution,                 # Input resolution.
         img_channels,                   # Number of input color channels.
         architecture        = 'resnet', # Architecture: 'orig', 'skip', 'resnet'.
