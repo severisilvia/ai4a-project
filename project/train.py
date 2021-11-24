@@ -62,7 +62,6 @@ D_kwargs.block_kwargs.freeze_layers = opt.freezed
 D_kwargs.epilogue_kwargs.mbstd_group_size = opt.mbstd_group
 # metrics = opts.metrics
 # Base configuration.
-ema_kimg = batch_size * 10 / 32
 G_kwargs.class_name = 'training.networks_stylegan3.Generator'
 G_kwargs.magnitude_ema_beta = 0.5 ** (batch_size / (20 * 1e3))
 if opt.cfg == 'stylegan3-r':
@@ -148,8 +147,8 @@ netG_B2A = Generator(**G_kwargs, **common_kwargs)
         mapping_kwargs      = {},       # Arguments for MappingNetwork.
         epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
 """
-netD_A = Discriminator(opt.input_nc)
-netD_B = Discriminator(opt.output_nc)
+netD_A = Discriminator(**D_kwargs, **common_kwargs)
+netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
 if opt.cuda:
     netG_A2B.cuda()
