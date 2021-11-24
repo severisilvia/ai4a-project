@@ -15,7 +15,7 @@ from project.utils.utils import EasyDict
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
-parser.add_argument('--dataroot', type=str, default='datasets/day_night/test', help='root directory of the datasets')
+parser.add_argument('--dataroot', type=str, default='../datasets/day_night', help='root directory of the datasets')
 parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
 parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
 parser.add_argument('--size', type=int, default=256, help='size of the data (squared assumed)')
