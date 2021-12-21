@@ -14,7 +14,7 @@ code."""
 import re
 import numpy as np
 import torch
-import dnnlib
+from utils.utils import EasyDict
 
 from . import misc
 
@@ -218,9 +218,9 @@ class Collector:
                 ...
             )
         """
-        stats = dnnlib.EasyDict()
+        stats = EasyDict()
         for name in self.names():
-            stats[name] = dnnlib.EasyDict(num=self.num(name), mean=self.mean(name), std=self.std(name))
+            stats[name] = EasyDict(num=self.num(name), mean=self.mean(name), std=self.std(name))
         return stats
 
     def __getitem__(self, name):

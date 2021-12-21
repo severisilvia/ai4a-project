@@ -20,7 +20,7 @@ import inspect
 import copy
 import uuid
 import types
-from project.utils.utils import EasyDict
+from utils.utils import EasyDict
 
 #----------------------------------------------------------------------------
 

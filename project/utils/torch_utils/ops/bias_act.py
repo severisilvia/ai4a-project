@@ -11,7 +11,7 @@
 import os
 import numpy as np
 import torch
-from project.utils.utils import EasyDict
+from utils.utils import EasyDict
 
 from .. import custom_ops
 from .. import misc
