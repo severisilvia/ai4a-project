@@ -11,8 +11,6 @@ arbitrarily high order gradients with zero performance penalty."""
 
 import contextlib
 import torch
-import torch.nn.functional
-import torch.backends.cudnn
 
 # pylint: disable=redefined-builtin
 # pylint: disable=arguments-differ
