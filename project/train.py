@@ -26,11 +26,11 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
                         help='epoch to start linearly decaying the learning rate to 0')
-    parser.add_argument('--size', type=int, default=256, help='size of the data crop (squared assumed)')
+    parser.add_argument('--size', type=int, default=512, help='size of the data crop (squared assumed)')
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
@@ -43,8 +43,8 @@ if __name__ == '__main__':
     parser.add_argument('--label_dim', help='Number of labels', type=int, default=2)
     parser.add_argument('--resolution',
                         help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously',
-                        type=int, default=4)
-    parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=4)
+                        type=int, default=512)
+    parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=3)
     opt = parser.parse_args()
     print(opt)
 
@@ -214,28 +214,34 @@ if __name__ == '__main__':
             ###### Generators A2B and B2A ######
             optimizer_G.zero_grad()
 
+            #Sampling z from a random normal distribution
+            z = torch.randn([1, opt.size])
+
+            #creating the labels vector
+            c = torch.ones([1, opt.label_dim])
+
             # Identity loss
             # G_A2B(B) should equal B if real B is fed
-            same_B = netG_A2B(real_B)
+            same_B = netG_A2B(z, c)
             loss_identity_B = criterion_identity(same_B, real_B) * 5.0
             # G_B2A(A) should equal A if real A is fed
-            same_A = netG_B2A(real_A)
+            same_A = netG_B2A(real_A, c=0)
             loss_identity_A = criterion_identity(same_A, real_A) * 5.0
 
             # GAN loss
-            fake_B = netG_A2B(real_A)
-            pred_fake = netD_B(fake_B)
+            fake_B = netG_A2B(real_A, c=0)
+            pred_fake = netD_B(fake_B, c=1)
             loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
-            fake_A = netG_B2A(real_B)
-            pred_fake = netD_A(fake_A)
+            fake_A = netG_B2A(real_B, c=1)
+            pred_fake = netD_A(fake_A, c=0)
             loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
             # Cycle loss
-            recovered_A = netG_B2A(fake_B)
+            recovered_A = netG_B2A(fake_B, c=1)
             loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
 
-            recovered_B = netG_A2B(fake_A)
+            recovered_B = netG_A2B(fake_A, c=0)
             loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
             # Total loss
