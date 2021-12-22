@@ -19,7 +19,8 @@ from utils.torch_utils import persistence
 from utils.torch_utils.ops import conv2d_gradfix
 from utils.torch_utils.ops import filtered_lrelu
 from utils.torch_utils.ops import bias_act
-
+import copy
+import matplotlib.pyplot as plt
 #----------------------------------------------------------------------------
 
 @misc.profiled_function
@@ -511,6 +512,10 @@ class Generator(torch.nn.Module):
     def forward(self, z, c, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff, update_emas=update_emas)
         img = self.synthesis(ws, update_emas=update_emas, **synthesis_kwargs)
+        im=copy.copy(img)
+        a = im.reshape(im.shape[2], im.shape[3], im.shape[1])
+        plt.imshow(a.detach().numpy())
+        plt.show()
         return img
 
 #----------------------------------------------------------------------------

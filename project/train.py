@@ -216,6 +216,9 @@ if __name__ == '__main__':
 
             #Sampling z from a random normal distribution
             z = torch.randn([1, opt.size])
+            """Essendo un GAN ciclica l'imput non deve essere un vettore latente
+                ma l'immagine da traslare, allora dobbiamo modificare la rete per 
+                accettare in ingresso un'immagine. Mapping network forse inutile."""
 
             #creating the labels vector
             c = torch.ones([1, opt.label_dim])
