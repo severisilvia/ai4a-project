@@ -33,7 +33,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
-    parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
+    parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2',
+                        type=str,
                         default='stylegan3-t')
     parser.add_argument('--cbase', help='Capacity multiplier', type=int, default=32768)
     parser.add_argument('--cmax', help='Max. feature maps', type=int, default=512)
@@ -44,7 +45,8 @@ if __name__ == '__main__':
     parser.add_argument('--resolution',
                         help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously',
                         type=int, default=512)
-    parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=3)
+    parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int,
+                        default=3)
     opt = parser.parse_args()
     print(opt)
 
@@ -53,13 +55,12 @@ if __name__ == '__main__':
 
     # Costruzione argomenti per istanziare modelli
     # Initialize config.
-    G_kwargs = EasyDict(z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
-    D_kwargs = EasyDict(block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
+    G_kwargs = EasyDict(img_real_dim=512)
+    D_kwargs = EasyDict(block_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
     # Hyperparameters & settings.
     batch_size = opt.batchSize
     G_kwargs.channel_base = D_kwargs.channel_base = opt.cbase
     G_kwargs.channel_max = D_kwargs.channel_max = opt.cmax
-    G_kwargs.mapping_kwargs.num_layers = 2 if opt.map_depth is None else opt.map_depth
     D_kwargs.block_kwargs.freeze_layers = opt.freezed
     D_kwargs.epilogue_kwargs.mbstd_group_size = opt.mbstd_group
     # metrics = opts.metrics
@@ -106,7 +107,7 @@ if __name__ == '__main__':
                             is_torgb,                       # Is this the final ToRGB layer?
                             is_critically_sampled,          # Does this layer use critical sampling?
                             use_fp16,                       # Does this layer use FP16?
-    
+
                             # Input & output specifications.
                             in_channels,                    # Number of input channels.
                             out_channels,                   # Number of output channels.
@@ -118,7 +119,7 @@ if __name__ == '__main__':
                             out_cutoff,                     # Output cutoff frequency (f_c).
                             in_half_width,                  # Input transition band half-width (f_h).
                             out_half_width,                 # Output Transition band half-width (f_h).
-    
+
                             # Hyperparameters.
                             conv_kernel         = 3,        # Convolution kernel size. Ignored for final the ToRGB layer.
                             filter_size         = 6,        # Low-pass filter size relative to the lower resolution when up/downsampling.
@@ -174,11 +175,14 @@ if __name__ == '__main__':
     optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
 
     lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G,
-                                                       lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+                                                       lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
+                                                                          opt.decay_epoch).step)
     lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A,
-                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
+                                                                            opt.decay_epoch).step)
     lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B,
-                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
+                                                                            opt.decay_epoch).step)
 
     # Inputs & targets memory allocation
     Tensor = torch.cuda.FloatTensor if opt.cuda else torch.Tensor
@@ -203,7 +207,6 @@ if __name__ == '__main__':
     # Loss plot
     # logger = Logger(opt.n_epochs, len(dataloader))
 
-
     # ##### Training ######
     for epoch in range(opt.epoch, opt.n_epochs):
         for i, batch in enumerate(dataloader):
@@ -214,13 +217,13 @@ if __name__ == '__main__':
             ###### Generators A2B and B2A ######
             optimizer_G.zero_grad()
 
-            #Sampling z from a random normal distribution
+            # Sampling z from a random normal distribution
             z = torch.randn([1, opt.size])
             """Essendo un GAN ciclica l'imput non deve essere un vettore latente
                 ma l'immagine da traslare, allora dobbiamo modificare la rete per 
                 accettare in ingresso un'immagine. Mapping network forse inutile."""
 
-            #creating the labels vector
+            # creating the labels vector
             c = torch.ones([1, opt.label_dim])
 
             # Identity loss
