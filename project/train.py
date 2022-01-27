@@ -214,36 +214,28 @@ if __name__ == '__main__':
             ###### Generators A2B and B2A ######
             optimizer_G.zero_grad()
 
-            #Sampling z from a random normal distribution
-            z = torch.randn([1, opt.size])
-            """Essendo un GAN ciclica l'imput non deve essere un vettore latente
-                ma l'immagine da traslare, allora dobbiamo modificare la rete per 
-                accettare in ingresso un'immagine. Mapping network forse inutile."""
-
-            #creating the labels vector
-            c = torch.ones([0, 1])
             # Identity loss
             # G_A2B(B) should equal B if real B is fed
-            same_B = netG_A2B(real_B, c=c)
+            same_B = netG_A2B(real_B)
             loss_identity_B = criterion_identity(same_B, real_B) * 5.0
             # G_B2A(A) should equal A if real A is fed
-            same_A = netG_B2A(real_A, c=c)
+            same_A = netG_B2A(real_A)
             loss_identity_A = criterion_identity(same_A, real_A) * 5.0
 
             # GAN loss
-            fake_B = netG_A2B(real_A, c=c)
+            fake_B = netG_A2B(real_A)
             pred_fake = netD_B(fake_B)
             loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
-            fake_A = netG_B2A(real_B, c=c)
+            fake_A = netG_B2A(real_B)
             pred_fake = netD_A(fake_A)
             loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
             # Cycle loss
-            recovered_A = netG_B2A(fake_B, c=c)
+            recovered_A = netG_B2A(fake_B)
             loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
 
-            recovered_B = netG_A2B(fake_A, c=c)
+            recovered_B = netG_A2B(fake_A)
             loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
             # Total loss
