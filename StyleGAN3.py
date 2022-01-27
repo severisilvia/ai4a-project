@@ -555,10 +555,10 @@ class Generator(torch.nn.Module):
         z = self. reduce(img_in)
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff, update_emas=update_emas)
         img = self.synthesis(ws, update_emas=update_emas, **synthesis_kwargs)
-        im=copy.copy(img)
-        a = im.reshape(im.shape[2], im.shape[3], im.shape[1])
-        #plt.imshow(a.detach().numpy())
-        plt.show()
+        # im=copy.copy(img)
+        # a = im.reshape(im.shape[2], im.shape[3], im.shape[1])
+        # plt.imshow(a.detach().numpy())
+        # plt.show()
         return img
 
 # ----------------------------------------------------------------------------

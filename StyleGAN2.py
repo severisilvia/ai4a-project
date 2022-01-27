@@ -733,9 +733,9 @@ class DiscriminatorEpilogue(torch.nn.Module):
 @persistence.persistent_class
 class Discriminator(torch.nn.Module):
     def __init__(self,
-        c_dim,                          # Conditioning label (C) dimensionality.
         img_resolution,                 # Input resolution.
         img_channels,                   # Number of input color channels.
+        c_dim               = 0,        # Conditioning label (C) dimensionality.
         architecture        = 'resnet', # Architecture: 'orig', 'skip', 'resnet'.
         channel_base        = 32768,    # Overall multiplier for the number of channels.
         channel_max         = 512,      # Maximum number of channels in any layer.
@@ -775,7 +775,7 @@ class Discriminator(torch.nn.Module):
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, **epilogue_kwargs, **common_kwargs)
 
-    def forward(self, img, c, update_emas=False, **block_kwargs):
+    def forward(self, img, c = 0, update_emas=False, **block_kwargs):
         _ = update_emas # unused
         x = None
         for res in self.block_resolutions:
