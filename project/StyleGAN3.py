@@ -153,7 +153,7 @@ class MappingNetwork(torch.nn.Module):
         z_dim,                      # Input latent (Z) dimensionality.
         w_dim,                      # Intermediate latent (W) dimensionality.
         num_ws,                     # Number of intermediate latents to output.
-        c_dim           = 0,        # Conditioning label (C) dimensionality, 0 = no labels.
+        c_dim           = 0,         # Conditioning label (C) dimensionality, 0 = no labels.
         num_layers      = 2,        # Number of mapping layers.
         lr_multiplier   = 0.01,     # Learning rate multiplier for the mapping layers.
         w_avg_beta      = 0.998,    # Decay for tracking the moving average of W during training.
@@ -550,8 +550,8 @@ class Generator(torch.nn.Module):
         self.num_ws = self.synthesis.num_ws
         self.mapping = MappingNetwork(z_dim=z_dim, c_dim=c_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs)
 
-    def forward(self, z, c, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
-        z = self.reduce(z) # riduciamo l'immagine da (3,512,512)--->(1,512)
+
+    def forward(self, z, c=0, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff, update_emas=update_emas)
         img = self.synthesis(ws, update_emas=update_emas, **synthesis_kwargs)
         im=copy.copy(img)
@@ -560,4 +560,4 @@ class Generator(torch.nn.Module):
         plt.show()
         return img
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
