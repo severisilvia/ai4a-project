@@ -164,7 +164,7 @@ if __name__ == '__main__':
     netD_B.apply(weights_init_normal)
 
     # Lossess
-    criterion_GAN = torch.nn.MSELoss()  # VEDI SE VA BENE
+    criterion_GAN = torch.nn.MSELoss()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
 
@@ -217,14 +217,6 @@ if __name__ == '__main__':
             ###### Generators A2B and B2A ######
             optimizer_G.zero_grad()
 
-            # Sampling z from a random normal distribution
-            z = torch.randn([1, opt.size])
-            """Essendo un GAN ciclica l'imput non deve essere un vettore latente
-                ma l'immagine da traslare, allora dobbiamo modificare la rete per 
-                accettare in ingresso un'immagine. Mapping network forse inutile."""
-
-            # creating the labels vector
-            c = torch.ones([1, opt.label_dim])
 
             # Identity loss
             # G_A2B(B) should equal B if real B is fed

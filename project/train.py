@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--map-depth', help='Mapping network depth  [default: varies]', type=int, default=2)
     parser.add_argument('--freezed', help='Freeze first layers of D', type=int, default=0)
     parser.add_argument('--mbstd-group', help='Minibatch std group size', type=int, default=4)
-    parser.add_argument('--label_dim', help='Number of labels', type=int, default=2)
+    parser.add_argument('--label_dim', help='Number of labels', type=int, default=0)
     parser.add_argument('--resolution',
                         help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously',
                         type=int, default=512)
@@ -164,6 +164,7 @@ if __name__ == '__main__':
 
     # Lossess
     criterion_GAN = torch.nn.MSELoss()  # VEDI SE VA BENE
+    #criterion_GAN= torch.nn.functional.softplus()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
 
@@ -225,6 +226,7 @@ if __name__ == '__main__':
 
             # Identity loss
             # G_A2B(B) should equal B if real B is fed
+
             same_B = netG_A2B(real_B)
             loss_identity_B = criterion_identity(same_B, real_B) * 5.0
             # G_B2A(A) should equal A if real A is fed

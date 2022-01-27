@@ -3,4 +3,5 @@ numpy
 torchvision
 visdom
 scipy
+matplotlib
 
