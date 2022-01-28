@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
@@ -294,22 +294,20 @@ if __name__ == '__main__':
             optimizer_D_B.step()
             ###################################
 
-
-            #Progress report (http://localhost:8097)
+            # Progress report (http://localhost:8097)
             logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
                       'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
                      'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
                    images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
-            #print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
-            #           'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-            #         'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
-            #images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
-            plt.imshow('image',tensor2image(fake_A.data).transpose((1, 2, 0)))
+            # print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+            #            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+            #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
+            # images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
+
+            image_to_print = real_A
+            plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
             plt.show()
-
-
-
 
         # Update learning rates
         lr_scheduler_G.step()
