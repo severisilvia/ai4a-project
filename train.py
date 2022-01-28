@@ -26,7 +26,7 @@ from utils.utils import Logger
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
@@ -305,7 +305,7 @@ if __name__ == '__main__':
             #           'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
             #         'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
             #images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
-            plt.imshow('image',tensor2image(fake_A.data).transpose((1, 2, 0)))
+            plt.imshow('image',tensor2image(fake_A).transpose((1, 2, 0)))
             plt.show()
 
 
