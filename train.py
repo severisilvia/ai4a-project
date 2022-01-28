@@ -19,7 +19,7 @@ from utils.utils import weights_init_normal
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
@@ -286,7 +286,8 @@ if __name__ == '__main__':
 
             optimizer_D_B.step()
             ###################################
-
+            print("loss:")
+            print(loss_GAN_A2B)
             # Progress report (http://localhost:8097)
             # logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
             #           'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
