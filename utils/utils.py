@@ -10,7 +10,6 @@ import numpy as np
 
 from typing import Any
 
-
 def tensor2image(tensor):
     image = 127.5 * (tensor[0].cpu().float().numpy() + 1.0)
     if image.shape[0] == 1:
@@ -20,7 +19,7 @@ def tensor2image(tensor):
 
 class Logger():
     def __init__(self, n_epochs, batches_epoch):
-        self.viz = Visdom()
+        self.viz = Visdom(offline=True, log_to_filename="log.txt")
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
         self.epoch = 1
@@ -40,9 +39,9 @@ class Logger():
 
         for i, loss_name in enumerate(losses.keys()):
             if loss_name not in self.losses:
-                self.losses[loss_name] = losses[loss_name].data[0]
+                self.losses[loss_name] = losses[loss_name].item()
             else:
-                self.losses[loss_name] += losses[loss_name].data[0]
+                self.losses[loss_name] += losses[loss_name].item()
 
             if (i + 1) == len(losses.keys()):
                 sys.stdout.write('%s: %.4f -- ' % (loss_name, self.losses[loss_name] / self.batch))
@@ -140,4 +139,3 @@ class EasyDict(dict):
 
     def __delattr__(self, name: str) -> None:
         del self[name]
-

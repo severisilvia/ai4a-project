@@ -3,6 +3,10 @@ import itertools
 import os
 import torch
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
+
+
+
 from PIL import Image
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
@@ -16,6 +20,9 @@ from utils.utils import LambdaLR
 # cerca di capire queste funzioni a cosa servono
 from utils.utils import ReplayBuffer
 from utils.utils import weights_init_normal
+from utils.utils import tensor2image
+from utils.utils import Logger
+
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
@@ -205,7 +212,7 @@ if __name__ == '__main__':
                             batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
 
     # Loss plot
-    # logger = Logger(opt.n_epochs, len(dataloader))
+    logger = Logger(opt.n_epochs, len(dataloader))
 
 
     # ##### Training ######
@@ -287,11 +294,21 @@ if __name__ == '__main__':
             optimizer_D_B.step()
             ###################################
 
-            # Progress report (http://localhost:8097)
-            # logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+            #Progress report (http://localhost:8097)
+            logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+                      'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                     'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+                   images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+
+            #print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
             #           'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-            #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-            #        images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+            #         'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
+            #images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
+            plt.imshow('image',tensor2image(fake_A.data).transpose((1, 2, 0)))
+            plt.show()
+
+
+
 
         # Update learning rates
         lr_scheduler_G.step()
