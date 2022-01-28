@@ -5,8 +5,6 @@ import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
-
-
 from PIL import Image
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
@@ -23,6 +21,9 @@ from utils.utils import weights_init_normal
 from utils.utils import tensor2image
 from utils.utils import Logger
 
+# per training distribuito
+from torch.utils.data.distributed import DistributedSampler
+
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=16, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
@@ -56,6 +57,12 @@ if __name__ == '__main__':
                         help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously',
                         type=int, default=512)
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=3)
+
+    #cose per training distribuito
+    parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
+    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
+    #parser.add_argument("--local_rank", default=0, type=int)
+
     opt = parser.parse_args()
     print(opt)
 
@@ -84,6 +91,10 @@ if __name__ == '__main__':
     common_kwargs = dict(c_dim=opt.label_dim, img_resolution=opt.resolution, img_channels=opt.num_channels)
 
     # ##### Definition of variables ##### #
+
+    #per training distribuito
+    gpus = [int(i) for i in opt.gpus.split(',')]
+    #torch.distributed.init_process_group('nccl')
 
     # Generators
     """     
@@ -163,10 +174,16 @@ if __name__ == '__main__':
     netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
     if opt.cuda:
-        netG_A2B.cuda()
-        netG_B2A.cuda()
-        netD_A.cuda()
-        netD_B.cuda()
+        device = torch.device('cuda')
+        netG_A2B.to(device)
+        netG_B2A.to(device)
+        netD_A.to(device)
+        netD_B.to(device)
+        if opt.parallel:
+            netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
+            netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
+            netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
+            netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
 
     netG_A2B.apply(weights_init_normal)
     netG_B2A.apply(weights_init_normal)
@@ -208,8 +225,8 @@ if __name__ == '__main__':
                    transforms.ToTensor(),
                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     robo = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
-    dataloader = DataLoader(robo,
-                            batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
+    #dist_sampler = DistributedSampler(robo)
+    dataloader = DataLoader(robo, batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
 
     # Loss plot
     logger = Logger(opt.n_epochs, len(dataloader))
@@ -218,6 +235,7 @@ if __name__ == '__main__':
     # ##### Training ######
     for epoch in range(opt.epoch, opt.n_epochs):
         for i, batch in enumerate(dataloader):
+            print("ci sonoooo")
             # Set model input
             real_A = Variable(input_A.copy_(batch['A']))
             real_B = Variable(input_B.copy_(batch['B']))
@@ -305,10 +323,10 @@ if __name__ == '__main__':
             #            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
             #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
             # images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
-
-            image_to_print = real_A
-            plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
-            plt.show()
+            #
+            # image_to_print = real_A
+            # plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
+            # plt.show()
 
         # Update learning rates
         lr_scheduler_G.step()
