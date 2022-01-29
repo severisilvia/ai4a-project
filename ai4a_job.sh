@@ -19,12 +19,12 @@ export WORLD_SIZE=2
 export LOCAL_RANK=0
 
 export RANK=0
-srun -N1 -n1 -w $MASTER_ADDR --gpus=1 --exclusive python -u train_distributed.py <args> &
+srun -N1 -n1 -w $MASTER_ADDR --gpus=1 --exclusive python -u train_distributed.py &
 sleep 5
 
 for i in {1..1}; do
 	  export RANK=$i
-	  srun -N1 -n1 --gpus=1 --exclusive python -u train_distributed.py <args> &
+	  srun -N1 -n1 --gpus=1 --exclusive python -u train_distributed.py &
 done
 wait
 
