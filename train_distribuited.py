@@ -27,13 +27,13 @@ from torch.utils.data.distributed import DistributedSampler
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=16, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -59,9 +59,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=3)
 
     #cose per training distribuito
-    parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
     parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
-    #parser.add_argument("--local_rank", default=0, type=int)
+    #(DATAPARALLEL)
+    #parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
+    #(DISTRIBUTED DATAPARALLEL)
+    parser.add_argument("--local_rank", default=0, type=int)
 
     opt = parser.parse_args()
     print(opt)
@@ -92,9 +94,11 @@ if __name__ == '__main__':
 
     # ##### Definition of variables ##### #
 
-    #per training distribuito
-    gpus = [int(i) for i in opt.gpus.split(',')]
-    #torch.distributed.init_process_group('nccl')
+    #per training distribuito(DATAPARALLEL)
+    #gpus = [int(i) for i in opt.gpus.split(',')]
+
+    #per training distribuito (DISTRIBUTED DATAPARALLEL)
+    torch.distributed.init_process_group('nccl')
 
     # Generators
     """     
@@ -173,17 +177,28 @@ if __name__ == '__main__':
     netD_A = Discriminator(**D_kwargs, **common_kwargs)
     netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
-    if opt.cuda:
+    if (opt.cuda == True and opt.parallel == False):
         device = torch.device('cuda')
         netG_A2B.to(device)
         netG_B2A.to(device)
         netD_A.to(device)
         netD_B.to(device)
-        if opt.parallel:
-            netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
-            netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
-            netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
-            netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
+    if (opt.cuda == True and opt.parallel == True):
+        device = torch.device('cuda', opt.local_rank)
+        netG_A2B.to(device)
+        netG_B2A.to(device)
+        netD_A.to(device)
+        netD_B.to(device)
+        #(DATAPARALLEL)
+        # netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
+        # netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
+        # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
+        # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
+        #(DISTRIBUTED DATAPARALLEL)
+        netD_A = torch.nn.DistributedDataParallel(netD_A, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netD_B = torch.nn.DistributedDataParallel(netD_B, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netG_A2B = torch.nn.DistributedDataParallel(netG_A2B, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netG_B2A = torch.nn.DistributedDataParallel(netG_B2A, device_ids=[opt.local_rank], output_device=opt.local_rank)
 
     netG_A2B.apply(weights_init_normal)
     netG_B2A.apply(weights_init_normal)
@@ -224,9 +239,10 @@ if __name__ == '__main__':
                    transforms.RandomHorizontalFlip(),
                    transforms.ToTensor(),
                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-    robo = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
-    #dist_sampler = DistributedSampler(robo)
-    dataloader = DataLoader(robo, batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
+    dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
+    #(DISTRIBUTED DATAPARALLEL)
+    dist_sampler = DistributedSampler(dataset)
+    dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu, sampler=dist_sampler)
 
     # Loss plot
     logger = Logger(opt.n_epochs, len(dataloader))
