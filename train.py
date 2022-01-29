@@ -26,7 +26,7 @@ from utils.utils import Logger
 
 if __name__ == '__main__':
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
