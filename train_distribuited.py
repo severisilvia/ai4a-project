@@ -23,6 +23,7 @@ from utils.utils import Logger
 
 # per training distribuito
 from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 if __name__ == '__main__':
@@ -33,7 +34,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=4, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
@@ -195,10 +196,10 @@ if __name__ == '__main__':
         # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
         # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
         #(DISTRIBUTED DATAPARALLEL)
-        netD_A = torch.nn.DistributedDataParallel(netD_A, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netD_B = torch.nn.DistributedDataParallel(netD_B, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netG_A2B = torch.nn.DistributedDataParallel(netG_A2B, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netG_B2A = torch.nn.DistributedDataParallel(netG_B2A, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netD_A = DDP(netD_A, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netD_B = DDP(netD_B, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netG_A2B = DDP(netG_A2B, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netG_B2A = DDP(netG_B2A, device_ids=[opt.local_rank], output_device=opt.local_rank)
 
     netG_A2B.apply(weights_init_normal)
     netG_B2A.apply(weights_init_normal)
@@ -242,7 +243,7 @@ if __name__ == '__main__':
     dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
     #(DISTRIBUTED DATAPARALLEL)
     dist_sampler = DistributedSampler(dataset)
-    dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu, sampler=dist_sampler)
+    dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu, sampler=dist_sampler)
 
     # Loss plot
     logger = Logger(opt.n_epochs, len(dataloader))

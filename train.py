@@ -225,7 +225,7 @@ if __name__ == '__main__':
             ###### Generators A2B and B2A ######
             optimizer_G.zero_grad()
 
-            # Identity loss
+            # Identity loss --> probabilmente è da togliere perchè serve solo nella generazioe di quadri
             # G_A2B(B) should equal B if real B is fed
             same_B = netG_A2B(real_B)
             loss_identity_B = criterion_identity(same_B, real_B) * 5.0

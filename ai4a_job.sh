@@ -1,17 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=ai4a
-#SBATCH --output=/homes/bwviglianisi/logs/ai4a_log_29_01
-#SBATCH --error=/homes/bwviglianisi/logs/ai4a_log_29_01
-#SBATCH --ntasks=2
-#SBATCH --gpus-per-task=1
+#SBATCH --output=/homes/sseveri/logs/ai4a_log_01_02_2
+#SBATCH --error=/homes/sseveri/logs/ai4a_log_01_02_2
+#SBATCH --gres=gpu:2
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-gpu=1
 #SBATCH --partition=students-prod
-#SBATCH --mail-user=232325@studenti.unimore.it
+#SBATCH --mail-user=229635@studenti.unimore.it
 #SBATCH --mail-type=ALL
 
 . /usr/local/anaconda3/etc/profile.d/conda.sh
 conda activate stylegan3
 
-cd /homes/bwviglianisi/ai4a-project
+cd /homes/sseveri/ai4a
 
 export MASTER_ADDR="aimagelab-srv-00"
 export MASTER_PORT=`comm -23 <(seq 8000 9000 | sort) <(ss -Htan | awk '{print $4}' | cut -d':' -f2 | sort -u) | shuf | head -n 1`
