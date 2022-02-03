@@ -2,9 +2,10 @@
 #SBATCH --job-name=ai4a
 #SBATCH --output=/homes/sseveri/logs/ai4a_log_03_02
 #SBATCH --error=/homes/sseveri/logs/ai4a_log_03_02
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:2
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-gpu=1
+#SBATCH --mem-per-gpu=20G
 #SBATCH --partition=students-prod
 #SBATCH --mail-user=229635@studenti.unimore.it
 #SBATCH --mail-type=ALL
@@ -23,7 +24,7 @@ export RANK=0
 srun -N1 -n1 -w $MASTER_ADDR --gpus=1 --exclusive python -u train_distribuited.py &
 sleep 5
 
-for i in {1..2}; do
+for i in {1..1}; do
 	  export RANK=$i
 	  srun -N1 -n1 --gpus=1 --exclusive python -u train_distribuited.py &
 done

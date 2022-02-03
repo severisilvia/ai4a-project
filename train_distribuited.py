@@ -278,7 +278,7 @@ if __name__ == '__main__':
     # ##### Training ######
     for epoch in range(opt.epoch, opt.n_epochs):
         for i, batch in enumerate(dataloader):
-            print("ci sonoooo")
+
             # Set model input
             real_A = Variable(input_A.copy_(batch['A']))
             real_B = Variable(input_B.copy_(batch['B']))
