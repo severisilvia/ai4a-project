@@ -4,4 +4,4 @@ torchvision
 visdom
 scipy
 matplotlib
-
+wandb

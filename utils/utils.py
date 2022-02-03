@@ -10,6 +10,12 @@ import numpy as np
 
 from typing import Any
 
+#SET FALSE TO DISABLE WANBD
+online_log = False
+
+if online_log:
+    import wandb
+
 def tensor2image(tensor):
     image = 127.5 * (tensor[0].cpu().float().numpy() + 1.0)
     if image.shape[0] == 1:
@@ -19,6 +25,8 @@ def tensor2image(tensor):
 
 class Logger():
     def __init__(self, n_epochs, batches_epoch):
+        if online_log:
+            wandb.init(project="ai4a")
         self.viz = Visdom(offline=True, log_to_filename="log.txt")
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
@@ -36,7 +44,8 @@ class Logger():
 
         sys.stdout.write(
             '\rEpoch %03d/%03d [%04d/%04d] -- ' % (self.epoch, self.n_epochs, self.batch, self.batches_epoch))
-
+        if online_log:
+            wandb.log('\rEpoch %03d/%03d [%04d/%04d] -- ' % (self.epoch, self.n_epochs, self.batch, self.batches_epoch))
         for i, loss_name in enumerate(losses.keys()):
             if loss_name not in self.losses:
                 self.losses[loss_name] = losses[loss_name].item()
@@ -45,12 +54,18 @@ class Logger():
 
             if (i + 1) == len(losses.keys()):
                 sys.stdout.write('%s: %.4f -- ' % (loss_name, self.losses[loss_name] / self.batch))
+                if online_log:
+                    wandb.log('%s: %.4f -- ' % (loss_name, self.losses[loss_name] / self.batch))
             else:
                 sys.stdout.write('%s: %.4f | ' % (loss_name, self.losses[loss_name] / self.batch))
+                if online_log:
+                    wandb.log('%s: %.4f | ' % (loss_name, self.losses[loss_name] / self.batch))
 
         batches_done = self.batches_epoch * (self.epoch - 1) + self.batch
         batches_left = self.batches_epoch * (self.n_epochs - self.epoch) + self.batches_epoch - self.batch
         sys.stdout.write('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
+        if online_log:
+            wandb.log('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
 
         # Draw images
         for image_name, tensor in images.items():

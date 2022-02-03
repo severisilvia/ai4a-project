@@ -100,7 +100,8 @@ if __name__ == '__main__':
     #gpus = [int(i) for i in opt.gpus.split(',')]
 
     #per training distribuito (DISTRIBUTED DATAPARALLEL)
-    torch.distributed.init_process_group('nccl')
+    if opt.parallel == True:
+        torch.distributed.init_process_group('nccl')
 
     # Generators
     """     
@@ -243,9 +244,12 @@ if __name__ == '__main__':
                    transforms.ToTensor(),
                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
-    #(DISTRIBUTED DATAPARALLEL)
-    dist_sampler = DistributedSampler(dataset)
-    dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu, sampler=dist_sampler)
+    if opt.parallel == True:
+        #(DISTRIBUTED DATAPARALLEL)
+        dist_sampler = DistributedSampler(dataset)
+        dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu, sampler=dist_sampler)
+    else:
+        dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
 
     # Loss plot
     logger = Logger(opt.n_epochs, len(dataloader))
