@@ -58,6 +58,7 @@ if __name__ == '__main__':
                         help='Resolution of the images expressed as the dimension of one of the two equals dimension image.shape[1] or image.shape[2] of the image, note that we want squared images obviously',
                         type=int, default=512)
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int, default=3)
+    parser.add_argument('--first_train', default=True, action='store_true', help='first training cycle')
 
     #cose per training distribuito
     parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
@@ -201,17 +202,18 @@ if __name__ == '__main__':
         netG_A2B = DDP(netG_A2B, device_ids=[opt.local_rank], output_device=opt.local_rank)
         netG_B2A = DDP(netG_B2A, device_ids=[opt.local_rank], output_device=opt.local_rank)
 
-    netG_A2B.apply(weights_init_normal)
-    netG_B2A.apply(weights_init_normal)
-    netD_A.apply(weights_init_normal)
-    netD_B.apply(weights_init_normal)
+    if(opt.first_train==True):
+        netG_A2B.apply(weights_init_normal)
+        netG_B2A.apply(weights_init_normal)
+        netD_A.apply(weights_init_normal)
+        netD_B.apply(weights_init_normal)
 
     # Lossess
     criterion_GAN = torch.nn.MSELoss()  # VEDI SE VA BENE
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
 
-    # Optimizers & LR schedulers --> CAPISCI COSA FANNO
+    # Optimizers & LR schedulers
     optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
                                    lr=opt.lr, betas=(0.5, 0.999))
     optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
@@ -248,6 +250,26 @@ if __name__ == '__main__':
     # Loss plot
     logger = Logger(opt.n_epochs, len(dataloader))
 
+    if (opt.first_train == False):
+        checkpointG_A2B= torch.load('netG_A2B.pt')
+        netG_A2B.load_state_dict(checkpointG_A2B["netG_A2B_state_dict"])
+        checkpointG_B2A = torch.load('netG_B2A.pt')
+        netG_B2A.load_state_dict(checkpointG_B2A["netG_B2A_state_dict"])
+        optimizer_G.load_state_dict(checkpointG_A2B["optimizer_G_state_dict"])
+        opt.epoch=checkpointG_A2B["epoch"]
+        loss_G =checkpointG_A2B["loss_G"]
+
+        checkpointD_A = torch.load('netD_A.pt')
+        netD_A.load_state_dict(checkpointD_A["netD_A_state_dict"])
+        optimizer_D_A.load_state_dict(checkpointD_A["optimizer_D_A_state_dict"])
+        opt.epoch = checkpointD_A["epoch"]
+        loss_D_A = checkpointD_A["loss_D_A"]
+
+        checkpointD_B = torch.load('netD_B.pt')
+        netD_B.load_state_dict(checkpointD_B["netD_B_state_dict"])
+        optimizer_D_B.load_state_dict(checkpointD_B["optimizer_D_B_state_dict"])
+        opt.epoch = checkpointD_B["epoch"]
+        loss_D_B = checkpointG_A2B["loss_D_B"]
 
     # ##### Training ######
     for epoch in range(opt.epoch, opt.n_epochs):
@@ -356,8 +378,12 @@ if __name__ == '__main__':
         torch.save(netD_A.state_dict(), 'netD_A.pth')
         torch.save(netD_B.state_dict(), 'netD_B.pth')
 
-        torch.save(netG_A2B.state_dict(), 'output/netG_A2B.pth')
-        torch.save(netG_B2A.state_dict(), 'output/netG_B2A.pth')
-        torch.save(netD_A.state_dict(), 'output/netD_A.pth')
-        torch.save(netD_B.state_dict(), 'output/netD_B.pth')
+        torch.save({"netG_A2B_state_dict": netG_A2B.state_dict(), "epoch": epoch ,
+                    "optimizer_G_state_dict": optimizer_G.state_dict() , "loss_G": loss_G  }, 'output/netG_A2B.pt')
+        torch.save({"netG_B2A_state_dict": netG_B2A.state_dict(), "epoch": epoch,
+                    "optimizer_G_state_dict": optimizer_G.state_dict(), "loss_G": loss_G}, 'output/netG_B2A.pt')
+        torch.save({"netD_A_state_dict": netD_A.state_dict(), "epoch": epoch,
+                    "optimizer_D_A_state_dict": optimizer_D_A.state_dict(), "loss_D_A": loss_D_A}, 'output/netD_A.pt')
+        torch.save({"netD_B_state_dict": netD_B.state_dict(), "epoch": epoch,
+                    "optimizer_D_B_state_dict": optimizer_D_B.state_dict(), "loss_D_B": loss_D_B}, 'output/netD_B.pt')
 
