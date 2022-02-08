@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=2, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     #per training distribuito (DISTRIBUTED DATAPARALLEL)
     if opt.parallel == True:
-        torch.distributed.init_process_group('nccl')
+        torch.distributed.init_process_group('nccl', rank=int(os.environ['RANK']), world_size=int(os.environ['WORLD_SIZE']))
 
     # Generators
     """     
@@ -187,7 +187,8 @@ if __name__ == '__main__':
         netD_A.to(device)
         netD_B.to(device)
     if (opt.cuda == True and opt.parallel == True):
-        device = torch.device('cuda', opt.local_rank)
+        device = torch.device('cuda', int(os.environ['LOCAL_RANK']))
+        print(device)
         netG_A2B.to(device)
         netG_B2A.to(device)
         netD_A.to(device)
@@ -198,10 +199,10 @@ if __name__ == '__main__':
         # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
         # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
         #(DISTRIBUTED DATAPARALLEL)
-        netD_A = DDP(netD_A, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netD_B = DDP(netD_B, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netG_A2B = DDP(netG_A2B, device_ids=[opt.local_rank], output_device=opt.local_rank)
-        netG_B2A = DDP(netG_B2A, device_ids=[opt.local_rank], output_device=opt.local_rank)
+        netD_A = DDP(netD_A, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
+        netD_B = DDP(netD_B, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
+        netG_A2B = DDP(netG_A2B, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
+        netG_B2A = DDP(netG_B2A, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
 
     if(opt.first_train==True):
         netG_A2B.apply(weights_init_normal)
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
     if opt.parallel == True:
         #(DISTRIBUTED DATAPARALLEL)
-        dist_sampler = DistributedSampler(dataset)
+        dist_sampler = DistributedSampler(dataset, rank=int(os.environ['RANK']), num_replicas=int(os.environ['WORLD_SIZE']))
         dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu, sampler=dist_sampler)
     else:
         dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
@@ -276,118 +277,119 @@ if __name__ == '__main__':
         loss_D_B = checkpointG_A2B["loss_D_B"]
 
     # ##### Training ######
-    for epoch in range(opt.epoch, opt.n_epochs):
-        for i, batch in enumerate(dataloader):
+    with torch.autograd.set_detect_anomaly(True):
+        for epoch in range(opt.epoch, opt.n_epochs):
+            for i, batch in enumerate(dataloader):
 
-            # Set model input
-            real_A = Variable(input_A.copy_(batch['A']))
-            real_B = Variable(input_B.copy_(batch['B']))
+                # Set model input
+                real_A = Variable(input_A.copy_(batch['A']))
+                real_B = Variable(input_B.copy_(batch['B']))
 
-            ###### Generators A2B and B2A ######
-            optimizer_G.zero_grad()
+                ###### Generators A2B and B2A ######
+                optimizer_G.zero_grad()
 
-            # Identity loss
-            # G_A2B(B) should equal B if real B is fed
-            same_B = netG_A2B(real_B)
-            loss_identity_B = criterion_identity(same_B, real_B) * 5.0
-            # G_B2A(A) should equal A if real A is fed
-            same_A = netG_B2A(real_A)
-            loss_identity_A = criterion_identity(same_A, real_A) * 5.0
+                # Identity loss
+                # G_A2B(B) should equal B if real B is fed
+                same_B = netG_A2B(real_B)
+                loss_identity_B = criterion_identity(same_B, real_B) * 5.0
+                # G_B2A(A) should equal A if real A is fed
+                same_A = netG_B2A(real_A)
+                loss_identity_A = criterion_identity(same_A, real_A) * 5.0
 
-            # GAN loss
-            fake_B = netG_A2B(real_A)
-            pred_fake = netD_B(fake_B)
-            loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
+                # GAN loss
+                fake_B = netG_A2B(real_A)
+                pred_fake = netD_B(fake_B)
+                loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
 
-            fake_A = netG_B2A(real_B)
-            pred_fake = netD_A(fake_A)
-            loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
+                fake_A = netG_B2A(real_B)
+                pred_fake = netD_A(fake_A)
+                loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
 
-            # Cycle loss
-            recovered_A = netG_B2A(fake_B)
-            loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
+                # Cycle loss
+                recovered_A = netG_B2A(fake_B)
+                loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
 
-            recovered_B = netG_A2B(fake_A)
-            loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
+                recovered_B = netG_A2B(fake_A)
+                loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
-            # Total loss
-            loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
-            loss_G.backward()
+                # Total loss
+                loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+                loss_G.backward()
 
-            optimizer_G.step()
-            ###################################
+                optimizer_G.step()
+                ###################################
 
-            # ##### Discriminator A ######
-            optimizer_D_A.zero_grad()
+                # ##### Discriminator A ######
+                optimizer_D_A.zero_grad()
 
-            # Real loss
-            pred_real = netD_A(real_A)
-            loss_D_real = criterion_GAN(pred_real, target_real)
+                # Real loss
+                pred_real = netD_A(real_A)
+                loss_D_real = criterion_GAN(pred_real, target_real)
 
-            # Fake loss
-            fake_A = fake_A_buffer.push_and_pop(fake_A)
-            pred_fake = netD_A(fake_A.detach())
-            loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                # Fake loss
+                fake_A = fake_A_buffer.push_and_pop(fake_A)
+                pred_fake = netD_A(fake_A)
+                loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-            # Total loss
-            loss_D_A = (loss_D_real + loss_D_fake) * 0.5
-            loss_D_A.backward()
+                # Total loss
+                loss_D_A = (loss_D_real + loss_D_fake) * 0.5
+                loss_D_A.backward()
 
-            optimizer_D_A.step()
-            ###################################
+                optimizer_D_A.step()
+                ###################################
 
-            # ##### Discriminator B ######
-            optimizer_D_B.zero_grad()
+                # ##### Discriminator B ######
+                optimizer_D_B.zero_grad()
 
-            # Real loss
-            pred_real = netD_B(real_B)
-            loss_D_real = criterion_GAN(pred_real, target_real)
+                # Real loss
+                pred_real = netD_B(real_B)
+                loss_D_real = criterion_GAN(pred_real, target_real)
 
-            # Fake loss
-            fake_B = fake_B_buffer.push_and_pop(fake_B)
-            pred_fake = netD_B(fake_B.detach())
-            loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                # Fake loss
+                fake_B = fake_B_buffer.push_and_pop(fake_B)
+                pred_fake = netD_B(fake_B)
+                loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-            # Total loss
-            loss_D_B = (loss_D_real + loss_D_fake) * 0.5
-            loss_D_B.backward()
+                # Total loss
+                loss_D_B = (loss_D_real + loss_D_fake) * 0.5
+                loss_D_B.backward()
 
-            optimizer_D_B.step()
-            ###################################
+                optimizer_D_B.step()
+                ###################################
 
-            # Progress report (http://localhost:8097)
-            logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
-                      'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                     'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-                   images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+                # Progress report (http://localhost:8097)
+                logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+                          'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                         'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+                       images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
 
-            # print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
-            #            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-            #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
-            # images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
-            #
-            # image_to_print = real_A
-            # plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
-            # plt.show()
+                # print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+                #            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
+                # images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
+                #
+                # image_to_print = real_A
+                # plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
+                # plt.show()
 
-        # Update learning rates
-        lr_scheduler_G.step()
-        lr_scheduler_D_A.step()
-        lr_scheduler_D_B.step()
+            # Update learning rates
+            lr_scheduler_G.step()
+            lr_scheduler_D_A.step()
+            lr_scheduler_D_B.step()
 
-        # Save models checkpoints
-        torch.save(netG_A2B.state_dict(), 'netG_A2B.pth')
-        torch.save(netG_B2A.state_dict(), 'netG_B2A.pth')
-        torch.save(netD_A.state_dict(), 'netD_A.pth')
-        torch.save(netD_B.state_dict(), 'netD_B.pth')
+            # Save models checkpoints
+            torch.save(netG_A2B.state_dict(), 'netG_A2B.pth')
+            torch.save(netG_B2A.state_dict(), 'netG_B2A.pth')
+            torch.save(netD_A.state_dict(), 'netD_A.pth')
+            torch.save(netD_B.state_dict(), 'netD_B.pth')
 
-        torch.save({"netG_A2B_state_dict": netG_A2B.state_dict(), "epoch": epoch ,
-                    "optimizer_G_state_dict": optimizer_G.state_dict() , "loss_G": loss_G  }, 'output/netG_A2B.pt')
-        torch.save({"netG_B2A_state_dict": netG_B2A.state_dict(), "epoch": epoch,
-                    "optimizer_G_state_dict": optimizer_G.state_dict(), "loss_G": loss_G}, 'output/netG_B2A.pt')
-        torch.save({"netD_A_state_dict": netD_A.state_dict(), "epoch": epoch,
-                    "optimizer_D_A_state_dict": optimizer_D_A.state_dict(), "loss_D_A": loss_D_A}, 'output/netD_A.pt')
-        torch.save({"netD_B_state_dict": netD_B.state_dict(), "epoch": epoch,
-                    "optimizer_D_B_state_dict": optimizer_D_B.state_dict(), "loss_D_B": loss_D_B}, 'output/netD_B.pt')
+            torch.save({"netG_A2B_state_dict": netG_A2B.state_dict(), "epoch": epoch ,
+                        "optimizer_G_state_dict": optimizer_G.state_dict() , "loss_G": loss_G  }, 'output/netG_A2B.pt')
+            torch.save({"netG_B2A_state_dict": netG_B2A.state_dict(), "epoch": epoch,
+                        "optimizer_G_state_dict": optimizer_G.state_dict(), "loss_G": loss_G}, 'output/netG_B2A.pt')
+            torch.save({"netD_A_state_dict": netD_A.state_dict(), "epoch": epoch,
+                        "optimizer_D_A_state_dict": optimizer_D_A.state_dict(), "loss_D_A": loss_D_A}, 'output/netD_A.pt')
+            torch.save({"netD_B_state_dict": netD_B.state_dict(), "epoch": epoch,
+                        "optimizer_D_B_state_dict": optimizer_D_B.state_dict(), "loss_D_B": loss_D_B}, 'output/netD_B.pt')
 
