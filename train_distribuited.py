@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     # Costruzione argomenti per istanziare modelli
     # Initialize config.
-    G_kwargs = EasyDict(z_dim=512, w_dim=512, mapping_kwargs=EasyDict()) #potremmo aumentare per entrare ed uscire dal generatore con più feature!
+    G_kwargs = EasyDict(z_dim=1000, w_dim=512, mapping_kwargs=EasyDict()) #potremmo aumentare per entrare ed uscire dal generatore con più feature!
     D_kwargs = EasyDict(block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
     # Hyperparameters & settings.
     batch_size = opt.batchSize
