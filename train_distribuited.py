@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=4, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=2, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -297,11 +297,11 @@ if __name__ == '__main__':
             # GAN loss
             fake_B = netG_A2B(real_A)
             pred_fake = netD_B(fake_B)
-            loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
+            loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
 
             fake_A = netG_B2A(real_B)
             pred_fake = netD_A(fake_A)
-            loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
+            loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
 
             # Cycle loss
             recovered_A = netG_B2A(fake_B)
