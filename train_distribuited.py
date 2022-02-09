@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=6, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2', type=str,
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--first_train', default=True, action='store_true', help='first training cycle')
 
     #cose per training distribuito
-    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
+    parser.add_argument('--parallel', default=False, action='store_true', help='use parallel computation')
     #(DATAPARALLEL)
     #parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
     #(DISTRIBUTED DATAPARALLEL)

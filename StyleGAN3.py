@@ -20,6 +20,7 @@ from utils.torch_utils import persistence
 from utils.torch_utils.ops import conv2d_gradfix
 from utils.torch_utils.ops import filtered_lrelu
 from utils.torch_utils.ops import bias_act
+import torchvision.models as models
 import copy
 import matplotlib.pyplot as plt
 #----------------------------------------------------------------------------
@@ -545,14 +546,18 @@ class Generator(torch.nn.Module):
         self.w_dim = w_dim
         self.img_resolution = img_resolution
         self.img_channels = img_channels
-        self.reduce = ReduceNet()
+        #self.reduce = ReduceNet()
         self.synthesis = SynthesisNetwork(w_dim=w_dim, img_resolution=img_resolution, img_channels=img_channels, **synthesis_kwargs)
         self.num_ws = self.synthesis.num_ws
         self.mapping = MappingNetwork(z_dim=z_dim, c_dim=c_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs)
+        self.resnet18= models.resnet18(pretrained=True)
 
 
     def forward(self, img_in, c=0, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
-        z = self. reduce(img_in)
+        with torch.no_grad():
+            self.resnet18.eval()
+            z = self.resnet18(img_in).to("cuda")
+        #z = self. reduce(img_in)
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff, update_emas=update_emas)
         img = self.synthesis(ws, update_emas=update_emas, **synthesis_kwargs)
         # im=copy.copy(img)
