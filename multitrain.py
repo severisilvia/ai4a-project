@@ -25,7 +25,7 @@ from utils.utils import Logger
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-if __name__ == '__main__':
+def main():
     my_env = os.environ.copy()
     my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=2, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=6, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
 
     # Parsing roba per StyleGAN3
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2',
@@ -62,11 +62,13 @@ if __name__ == '__main__':
     parser.add_argument('--first_train', default=True, action='store_true', help='first training cycle')
 
     # cose per training distribuito
-    parser.add_argument('--parallel', default=False, action='store_true', help='use parallel computation')
+    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
     # (DATAPARALLEL)
     # parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
     # (DISTRIBUTED DATAPARALLEL)
-    parser.add_argument("--local_rank", default=0, type=int)
+
+    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--local_world_size", type=int, default=1)
 
     opt = parser.parse_args()
     print(opt)
@@ -103,8 +105,19 @@ if __name__ == '__main__':
 
     # per training distribuito (DISTRIBUTED DATAPARALLEL)
     if opt.parallel == True:
-        torch.distributed.init_process_group('nccl', rank=int(os.environ['RANK']),
-                                             world_size=int(os.environ['WORLD_SIZE']))
+        env_dict = {
+            key: os.environ[key]
+            for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
+        }
+        print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
+        torch.distributed.init_process_group(backend="nccl")
+        print(
+            f"[{os.getpid()}] world_size = {torch.distributed.get_world_size()}, "
+            + f"rank = {torch.distributed.get_rank()}, backend={torch.distributed.get_backend()}"
+        )
+
+        #torch.distributed.init_process_group(backend= 'nccl', init_method="env://")
+
 
     # Generators
     """     
@@ -183,31 +196,37 @@ if __name__ == '__main__':
     netD_A = Discriminator(**D_kwargs, **common_kwargs)
     netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
+
     if (opt.cuda == True and opt.parallel == False):
         device = torch.device('cuda')
         netG_A2B.to(device)
         netG_B2A.to(device)
         netD_A.to(device)
         netD_B.to(device)
+
     if (opt.cuda == True and opt.parallel == True):
-        device = torch.device('cuda', int(os.environ['LOCAL_RANK']))
-        print(device)
-        netG_A2B.to(device)
-        netG_B2A.to(device)
-        netD_A.to(device)
-        netD_B.to(device)
+        n = torch.cuda.device_count() // opt.local_world_size
+        device_ids = list(range(opt.local_rank * n, (opt.local_rank + 1) * n))
+
+        print(
+            f"[{os.getpid()}] rank = {torch.distributed.get_rank()}, "
+            + f"world_size = {torch.distributed.get_world_size()}, n = {n}, device_ids = {device_ids}"
+        )
+
+        netG_A2B.cuda(device_ids[0])
+        netG_B2A.cuda(device_ids[0])
+        netD_A.cuda(device_ids[0])
+        netD_B.cuda(device_ids[0])
         # (DATAPARALLEL)
         # netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
         # netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
         # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
         # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
         # (DISTRIBUTED DATAPARALLEL)
-        netD_A = DDP(netD_A, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
-        netD_B = DDP(netD_B, device_ids=[int(os.environ['LOCAL_RANK'])], output_device=int(os.environ['LOCAL_RANK']))
-        netG_A2B = DDP(netG_A2B, device_ids=[int(os.environ['LOCAL_RANK'])],
-                       output_device=int(os.environ['LOCAL_RANK']))
-        netG_B2A = DDP(netG_B2A, device_ids=[int(os.environ['LOCAL_RANK'])],
-                       output_device=int(os.environ['LOCAL_RANK']))
+        netD_A = DDP(netD_A, device_ids)
+        netD_B = DDP(netD_B, device_ids)
+        netG_A2B = DDP(netG_A2B, device_ids)
+        netG_B2A = DDP(netG_B2A, device_ids)
 
     if (opt.first_train == True):
         netG_A2B.apply(weights_init_normal)
@@ -333,12 +352,12 @@ if __name__ == '__main__':
 
                 # Real loss
                 pred_real = netD_A(real_A)
-                loss_D_real = criterion_GAN(pred_real, target_real)
+                loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
 
                 # Fake loss
                 fake_A = fake_A_buffer.push_and_pop(fake_A)
                 pred_fake = netD_A(fake_A)
-                loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
 
                 # Total loss
                 loss_D_A = (loss_D_real + loss_D_fake) * 0.5
@@ -352,12 +371,12 @@ if __name__ == '__main__':
 
                 # Real loss
                 pred_real = netD_B(real_B)
-                loss_D_real = criterion_GAN(pred_real, target_real)
+                loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
 
                 # Fake loss
                 fake_B = fake_B_buffer.push_and_pop(fake_B)
                 pred_fake = netD_B(fake_B)
-                loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
 
                 # Total loss
                 loss_D_B = (loss_D_real + loss_D_fake) * 0.5
@@ -402,4 +421,7 @@ if __name__ == '__main__':
             torch.save({"netD_B_state_dict": netD_B.state_dict(), "epoch": epoch,
                         "optimizer_D_B_state_dict": optimizer_D_B.state_dict(), "loss_D_B": loss_D_B},
                        'output/netD_B.pt')
+    torch.distributed.destroy_process_group()
 
+if __name__ == '__main__':
+    main()

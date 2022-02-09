@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=ai4a
-#SBATCH --output=/homes/sseveri/logs/ai4a_log_09_02
-#SBATCH --error=/homes/sseveri/logs/ai4a_log_09_02
+#SBATCH --output=/homes/sseveri/logs/ai4a_log_09_02_parallel
+#SBATCH --error=/homes/sseveri/logs/ai4a_log_09_02_parallel
 #SBATCH --gres=gpu:2
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-gpu=1
@@ -21,11 +21,11 @@ export WORLD_SIZE=2
 export LOCAL_RANK=0
 
 export RANK=0
-srun -N1 -n1 -w $MASTER_ADDR --gpus=1 --exclusive python -u train_distribuited.py &
+srun -N1 -n1 -w $MASTER_ADDR --gpus=1 --exclusive python -u multitrain.py &
 sleep 5
 
 for i in {1..1}; do
 	  export RANK=$i
-	  srun -N1 -n1 --gpus=1 --exclusive python -u train_distribuited.py &
+	  srun -N1 -n1 --gpus=1 --exclusive python -u multitrain.py &
 done
 wait
