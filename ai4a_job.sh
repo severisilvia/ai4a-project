@@ -9,13 +9,14 @@
 #SBATCH --partition=students-prod
 #SBATCH --mail-user=229635@studenti.unimore.it
 #SBATCH --mail-type=ALL
+#SBATCH --exclude=aimagelab-srv-00
 
 . /usr/local/anaconda3/etc/profile.d/conda.sh
 conda activate stylegan3
 
 cd /homes/sseveri/ai4a
 
-export MASTER_ADDR="aimagelab-srv-00"
+export MASTER_ADDR=$SLURM_NODELIST
 export MASTER_PORT=`comm -23 <(seq 8000 9000 | sort) <(ss -Htan | awk '{print $4}' | cut -d':' -f2 | sort -u) | shuf | head -n 1`
 export WORLD_SIZE=2
 export LOCAL_RANK=0
