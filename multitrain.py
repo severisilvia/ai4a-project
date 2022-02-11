@@ -24,16 +24,17 @@ from utils.utils import Logger
 # per training distribuito
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+from utils.sync_batchnorm.batchnorm import convert_model
 
 def main():
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
-    parser.add_argument('--batchSize', type=int, default=2, help='size of the batches')
+    parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
@@ -213,20 +214,33 @@ def main():
             + f"world_size = {torch.distributed.get_world_size()}, n = {n}, device_ids = {device_ids}"
         )
 
-        netG_A2B.cuda(device_ids[0])
-        netG_B2A.cuda(device_ids[0])
-        netD_A.cuda(device_ids[0])
-        netD_B.cuda(device_ids[0])
+
         # (DATAPARALLEL)
         # netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
         # netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
         # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
         # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
+
+        #QUESTI SONO DUE MODI PER FARE LE BATCHNORM SINCRONE, UNA DI PYTOTCH E UNA FATTA DA UN GIT
+        # netD_A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_A)
+        # netD_B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_B)
+        # netG_A2B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_A2B)
+        # netG_B2A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_B2A)
+        netD_A = convert_model(netD_A)
+        netD_B = convert_model(netD_B)
+        netG_A2B = convert_model(netG_A2B)
+        netG_B2A = convert_model(netG_B2A)
+
+        netG_A2B = netG_A2B.cuda(device_ids[0])
+        netG_B2A = netG_B2A.cuda(device_ids[0])
+        netD_A = netD_A.cuda(device_ids[0])
+        netD_B = netD_B.cuda(device_ids[0])
+
         # (DISTRIBUTED DATAPARALLEL)
-        netD_A = DDP(netD_A, device_ids)
-        netD_B = DDP(netD_B, device_ids)
-        netG_A2B = DDP(netG_A2B, device_ids)
-        netG_B2A = DDP(netG_B2A, device_ids)
+        netD_A = DDP(netD_A, device_ids=device_ids, broadcast_buffers=False)
+        netD_B = DDP(netD_B, device_ids=device_ids, broadcast_buffers=False)
+        netG_A2B = DDP(netG_A2B, device_ids=device_ids, broadcast_buffers=False)
+        netG_B2A = DDP(netG_B2A, device_ids=device_ids, broadcast_buffers=False)
 
     if (opt.first_train == True):
         netG_A2B.apply(weights_init_normal)
