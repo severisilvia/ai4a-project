@@ -7,6 +7,7 @@ from torchvision.utils import save_image
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import torch
+import torchvision.models as models
 
 from dataset import ImageDataset
 from StyleGAN3 import Generator
@@ -25,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--generator_A2B', type=str, default='output/netG_A2B.pth', help='A2B generator checkpoint file')
     parser.add_argument('--generator_B2A', type=str, default='output/netG_B2A.pth', help='B2A generator checkpoint file')
 
-    # Parsing roba per StyleGAN3
+    # StyleGAN3 parameters
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2',
                         type=str, default='stylegan3-t' )
     parser.add_argument('--cbase', help='Capacity multiplier', type=int, default=32768)
@@ -49,7 +50,7 @@ if __name__ == '__main__':
 
     # Costruzione argomenti per istanziare modelli
     # Initialize config.
-    G_kwargs = EasyDict(class_name=None, z_dim=512, w_dim=512, mapping_kwargs=EasyDict())
+    G_kwargs = EasyDict(class_name=None, z_dim=1000, w_dim=512, mapping_kwargs=EasyDict())
     # Hyperparameters & settings.
     batch_size = opt.batchSize
     G_kwargs.channel_base = opt.cbase
@@ -69,11 +70,14 @@ if __name__ == '__main__':
     # Networks
     netG_A2B = Generator(**G_kwargs, **common_kwargs)
     netG_B2A = Generator(**G_kwargs, **common_kwargs)
+    resnet18 = models.resnet18(pretrained=True)
+
 
     if opt.cuda:
         device = torch.device('cuda')
         netG_A2B.to(device)
         netG_B2A.to(device)
+        resnet18.to(device)
 
     # Load state dicts
     netG_A2B.load_state_dict(torch.load(opt.generator_A2B))
@@ -82,6 +86,7 @@ if __name__ == '__main__':
     # Set model's test mode
     netG_A2B.eval()
     netG_B2A.eval()
+    resnet18.eval()
 
     # Inputs & targets memory allocation
     Tensor = torch.cuda.FloatTensor if opt.cuda else torch.Tensor
@@ -90,9 +95,8 @@ if __name__ == '__main__':
 
     # Dataset loader
     transforms_ = [ transforms.ToTensor(),
-                    transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
-    dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, mode='test'),
-                            batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
+    dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, mode='test'), batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
     ###################################
 
     ###### Testing######
@@ -109,8 +113,8 @@ if __name__ == '__main__':
         real_B = Variable(input_B.copy_(batch['B']))
 
         # Generate output
-        fake_B = 0.5*(netG_A2B(real_A).data + 1.0)
-        fake_A = 0.5*(netG_B2A(real_B).data + 1.0)
+        fake_B = 0.5*(netG_A2B(resnet18(real_A)).data + 1.0)
+        fake_A = 0.5*(netG_B2A(resnet18(real_B)).data + 1.0)
 
         # Save image files
         save_image(fake_A, 'output/A/%04d.png' % (i+1))

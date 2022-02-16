@@ -24,13 +24,13 @@ def tensor2image(tensor):
 
 
 class Logger():
-    def __init__(self, n_epochs, batches_epoch):
+    def __init__(self, n_epochs, batches_epoch, starting_epoch):
         if online_log:
             wandb.init(project="ai4a")
         self.viz = Visdom(offline=True, log_to_filename="log.txt")
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
-        self.epoch = 1
+        self.epoch = starting_epoch
         self.batch = 1
         self.prev_time = time.time()
         self.mean_period = 0

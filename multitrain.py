@@ -3,7 +3,7 @@ import itertools
 import os
 import torch
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
+import torch.nn.functional
 
 from PIL import Image
 from torch.autograd import Variable
@@ -12,23 +12,21 @@ from torch.utils.data import DataLoader
 from StyleGAN2 import Discriminator
 from StyleGAN3 import Generator
 from dataset import ImageDataset
-# Per costruire i dizionari da mandare come argomenti del training
 from utils.utils import EasyDict
 from utils.utils import LambdaLR
-# cerca di capire queste funzioni a cosa servono
 from utils.utils import ReplayBuffer
 from utils.utils import weights_init_normal
-from utils.utils import tensor2image
 from utils.utils import Logger
+import torchvision.models as models
 
-# per training distribuito
+# for distributed training
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.sync_batchnorm.batchnorm import convert_model
 
 def main():
     my_env = os.environ.copy()
-    my_env["PATH"] = "/homes/bwviglianisi/.conda/envs/stylegan3/bin:" + my_env["PATH"]
+    my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
     os.environ.update(my_env)
 
     parser = argparse.ArgumentParser()
@@ -43,9 +41,9 @@ def main():
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=4, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
 
-    # Parsing roba per StyleGAN3
+    #StyleGAN3 parameters
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2',
                         type=str,
                         default='stylegan3-t')
@@ -60,14 +58,10 @@ def main():
                         type=int, default=512)
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int,
                         default=3)
-    parser.add_argument('--first_train', default=True, action='store_true', help='first training cycle')
+    parser.add_argument('--first_train', default=False, action='store_true', help='first training cycle')
 
-    # cose per training distribuito
+    # for distributed training
     parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
-    # (DATAPARALLEL)
-    # parser.add_argument('--gpus', type=str, default='0,1,2', help='gpuids eg: 0,1,2,3')
-    # (DISTRIBUTED DATAPARALLEL)
-
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--local_world_size", type=int, default=1)
 
@@ -77,10 +71,9 @@ def main():
     if torch.cuda.is_available() and not opt.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-    # Costruzione argomenti per istanziare modelli
+
     # Initialize config.
-    G_kwargs = EasyDict(z_dim=1000, w_dim=512,
-                        mapping_kwargs=EasyDict())  # potremmo aumentare per entrare ed uscire dal generatore con più feature!
+    G_kwargs = EasyDict(z_dim=1000, w_dim=512,mapping_kwargs=EasyDict())
     D_kwargs = EasyDict(block_kwargs=EasyDict(), mapping_kwargs=EasyDict(), epilogue_kwargs=EasyDict())
     # Hyperparameters & settings.
     batch_size = opt.batchSize
@@ -89,7 +82,7 @@ def main():
     G_kwargs.mapping_kwargs.num_layers = 2 if opt.map_depth is None else opt.map_depth
     D_kwargs.block_kwargs.freeze_layers = opt.freezed
     D_kwargs.epilogue_kwargs.mbstd_group_size = opt.mbstd_group
-    # metrics = opts.metrics
+
     # Base configuration.
     G_kwargs.magnitude_ema_beta = 0.5 ** (batch_size / (20 * 1e3))
     if opt.cfg == 'stylegan3-r':
@@ -101,10 +94,7 @@ def main():
 
     # ##### Definition of variables ##### #
 
-    # per training distribuito(DATAPARALLEL)
-    # gpus = [int(i) for i in opt.gpus.split(',')]
-
-    # per training distribuito (DISTRIBUTED DATAPARALLEL)
+    # for distributed training
     if opt.parallel == True:
         env_dict = {
             key: os.environ[key]
@@ -117,83 +107,10 @@ def main():
             + f"rank = {torch.distributed.get_rank()}, backend={torch.distributed.get_backend()}"
         )
 
-        #torch.distributed.init_process_group(backend= 'nccl', init_method="env://")
-
-
     # Generators
-    """     
-            FOR THE GENERATOR:
-            z_dim,                      # Input latent (Z) dimensionality.
-            c_dim,                      # Conditioning label (C) dimensionality.
-            w_dim,                      # Intermediate latent (W) dimensionality.
-            img_resolution,             # Output resolution.
-            img_channels,               # Number of output color channels.
-            mapping_kwargs      = {
-                    z_dim,                      # Input latent (Z) dimensionality.
-                    c_dim,                      # Conditioning label (C) dimensionality, 0 = no labels.
-                    w_dim,                      # Intermediate latent (W) dimensionality.
-                    num_ws,                     # Number of intermediate latents to output.
-                    num_layers      = 2,        # Number of mapping layers.
-                    lr_multiplier   = 0.01,     # Learning rate multiplier for the mapping layers.
-                    w_avg_beta      = 0.998,    # Decay for tracking the moving average of W during training.
-                },   # Arguments for MappingNetwork. Di default è vuoto {}
-            **synthesis_kwargs = {      #arguments for SynthesisNetwork
-                    channel_base        = 32768,    # Overall multiplier for the number of channels.
-                    channel_max         = 512,      # Maximum number of channels in any layer.
-                    num_layers          = 14,       # Total number of layers, excluding Fourier features and ToRGB.
-                    num_critical        = 2,        # Number of critically sampled layers at the end.
-                    first_cutoff        = 2,        # Cutoff frequency of the first layer (f_{c,0}).
-                    first_stopband      = 2**2.1,   # Minimum stopband of the first layer (f_{t,0}).
-                    last_stopband_rel   = 2**0.3,   # Minimum stopband of the last layer, expressed relative to the cutoff.
-                    margin_size         = 10,       # Number of additional pixels outside the image.
-                    output_scale        = 0.25,     # Scale factor for the output image.
-                    num_fp16_res        = 4,        # Use FP16 for the N highest resolutions.
-                    **layer_kwargs = {              # Arguments for SynthesisLayer.
-                            is_torgb,                       # Is this the final ToRGB layer?
-                            is_critically_sampled,          # Does this layer use critical sampling?
-                            use_fp16,                       # Does this layer use FP16?
-
-                            # Input & output specifications.
-                            in_channels,                    # Number of input channels.
-                            out_channels,                   # Number of output channels.
-                            in_size,                        # Input spatial size: int or [width, height].
-                            out_size,                       # Output spatial size: int or [width, height].
-                            in_sampling_rate,               # Input sampling rate (s).
-                            out_sampling_rate,              # Output sampling rate (s).
-                            in_cutoff,                      # Input cutoff frequency (f_c).
-                            out_cutoff,                     # Output cutoff frequency (f_c).
-                            in_half_width,                  # Input transition band half-width (f_h).
-                            out_half_width,                 # Output Transition band half-width (f_h).
-
-                            # Hyperparameters.
-                            conv_kernel         = 3,        # Convolution kernel size. Ignored for final the ToRGB layer.
-                            filter_size         = 6,        # Low-pass filter size relative to the lower resolution when up/downsampling.
-                            lrelu_upsampling    = 2,        # Relative sampling rate for leaky ReLU. Ignored for final the ToRGB layer.
-                            use_radial_filters  = False,    # Use radially symmetric downsampling filter? Ignored for critically sampled layers.
-                            conv_clamp          = 256,      # Clamp the output to [-X, +X], None = disable clamping.
-                            magnitude_ema_beta  = 0.999,    # Decay rate for the moving average of input magnitudes.
-                }
-    """
-
     netG_A2B = Generator(**G_kwargs, **common_kwargs)
     netG_B2A = Generator(**G_kwargs, **common_kwargs)
-
     # Discriminators
-    """     
-            FOR THE DISCRIMINATOR:
-            c_dim,                          # Conditioning label (C) dimensionality. Nel codice lo inizializza così --> c_dim=training_set.label_dim
-            img_resolution,                 # Input resolution.
-            img_channels,                   # Number of input color channels.
-            architecture        = 'resnet', # Architecture: 'orig', 'skip', 'resnet'.
-            channel_base        = 32768,    # Overall multiplier for the number of channels.
-            channel_max         = 512,      # Maximum number of channels in any layer.
-            num_fp16_res        = 4,        # Use FP16 for the N highest resolutions.
-            conv_clamp          = 256,      # Clamp the output of convolution layers to +-X, None = disable clamping.
-            cmap_dim            = None,     # Dimensionality of mapped conditioning label, None = default.
-            block_kwargs        = {},       # Arguments for DiscriminatorBlock.
-            mapping_kwargs      = {},       # Arguments for MappingNetwork.
-            epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
-    """
     netD_A = Discriminator(**D_kwargs, **common_kwargs)
     netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
@@ -214,60 +131,49 @@ def main():
             + f"world_size = {torch.distributed.get_world_size()}, n = {n}, device_ids = {device_ids}"
         )
 
+        # BatchNorm Synchronization
+        netD_A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_A)
+        netD_B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_B)
+        netG_A2B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_A2B)
+        netG_B2A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_B2A)
 
-        # (DATAPARALLEL)
-        # netD_A = torch.nn.DataParallel(netD_A, device_ids=gpus)
-        # netD_B = torch.nn.DataParallel(netD_B, device_ids=gpus)
-        # netG_A2B = torch.nn.DataParallel(netG_A2B, device_ids=gpus)
-        # netG_B2A = torch.nn.DataParallel(netG_B2A, device_ids=gpus)
-
-        #QUESTI SONO DUE MODI PER FARE LE BATCHNORM SINCRONE, UNA DI PYTOTCH E UNA FATTA DA UN GIT
-        # netD_A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_A)
-        # netD_B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netD_B)
-        # netG_A2B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_A2B)
-        # netG_B2A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(netG_B2A)
-        netD_A = convert_model(netD_A)
-        netD_B = convert_model(netD_B)
-        netG_A2B = convert_model(netG_A2B)
-        netG_B2A = convert_model(netG_B2A)
 
         netG_A2B = netG_A2B.cuda(device_ids[0])
         netG_B2A = netG_B2A.cuda(device_ids[0])
         netD_A = netD_A.cuda(device_ids[0])
         netD_B = netD_B.cuda(device_ids[0])
 
-        # (DISTRIBUTED DATAPARALLEL)
+        #for distributed training
         netD_A = DDP(netD_A, device_ids=device_ids, broadcast_buffers=False)
         netD_B = DDP(netD_B, device_ids=device_ids, broadcast_buffers=False)
         netG_A2B = DDP(netG_A2B, device_ids=device_ids, broadcast_buffers=False)
         netG_B2A = DDP(netG_B2A, device_ids=device_ids, broadcast_buffers=False)
 
     if (opt.first_train == True):
+        #initialize weights
         netG_A2B.apply(weights_init_normal)
         netG_B2A.apply(weights_init_normal)
         netD_A.apply(weights_init_normal)
         netD_B.apply(weights_init_normal)
 
     # Lossess
-    criterion_GAN = torch.nn.MSELoss()  # VEDI SE VA BENE
+    criterion_GAN = torch.nn.MSELoss()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
 
+
+    #CAMBIARE IL LEARNING RATE E METTERNE DUE DIVERSI PER GENERATORE E DISCRIMINATORE.
+    #DISCRIMINATORE: LR_D=0.002
+    #GENERATORE: LR_G=0.0025
+
     # Optimizers & LR schedulers
-    optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
-                                   lr=opt.lr, betas=(0.5, 0.999))
+    optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=opt.lr, betas=(0.5, 0.999))
     optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
     optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
 
-    lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G,
-                                                       lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
-                                                                          opt.decay_epoch).step)
-    lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A,
-                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
-                                                                            opt.decay_epoch).step)
-    lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B,
-                                                         lr_lambda=LambdaLR(opt.n_epochs, opt.epoch,
-                                                                            opt.decay_epoch).step)
+    lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G,lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+    lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+    lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
 
     # Inputs & targets memory allocation
     Tensor = torch.cuda.FloatTensor if opt.cuda else torch.Tensor
@@ -284,40 +190,43 @@ def main():
                    transforms.RandomCrop(opt.size),
                    transforms.RandomHorizontalFlip(),
                    transforms.ToTensor(),
-                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+                   transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])]
     dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
+
     if opt.parallel == True:
-        # (DISTRIBUTED DATAPARALLEL)
-        dist_sampler = DistributedSampler(dataset, rank=int(os.environ['RANK']),
-                                          num_replicas=int(os.environ['WORLD_SIZE']))
-        dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu,
-                                sampler=dist_sampler)
+        dist_sampler = DistributedSampler(dataset, rank=int(os.environ['RANK']), num_replicas=int(os.environ['WORLD_SIZE']))
+        dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu, sampler=dist_sampler)
     else:
         dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
 
-    # Loss plot
-    logger = Logger(opt.n_epochs, len(dataloader))
-
     if (opt.first_train == False):
-        checkpointG_A2B = torch.load('netG_A2B.pt')
+        checkpointG_A2B = torch.load('output/netG_A2B.pt')
         netG_A2B.load_state_dict(checkpointG_A2B["netG_A2B_state_dict"])
-        checkpointG_B2A = torch.load('netG_B2A.pt')
+        checkpointG_B2A = torch.load('output/netG_B2A.pt')
         netG_B2A.load_state_dict(checkpointG_B2A["netG_B2A_state_dict"])
         optimizer_G.load_state_dict(checkpointG_A2B["optimizer_G_state_dict"])
         opt.epoch = checkpointG_A2B["epoch"]
         loss_G = checkpointG_A2B["loss_G"]
 
-        checkpointD_A = torch.load('netD_A.pt')
+        checkpointD_A = torch.load('output/netD_A.pt')
         netD_A.load_state_dict(checkpointD_A["netD_A_state_dict"])
         optimizer_D_A.load_state_dict(checkpointD_A["optimizer_D_A_state_dict"])
         opt.epoch = checkpointD_A["epoch"]
         loss_D_A = checkpointD_A["loss_D_A"]
 
-        checkpointD_B = torch.load('netD_B.pt')
+        checkpointD_B = torch.load('output/netD_B.pt')
         netD_B.load_state_dict(checkpointD_B["netD_B_state_dict"])
         optimizer_D_B.load_state_dict(checkpointD_B["optimizer_D_B_state_dict"])
         opt.epoch = checkpointD_B["epoch"]
-        loss_D_B = checkpointG_A2B["loss_D_B"]
+        loss_D_B = checkpointD_B["loss_D_B"]
+
+
+    # Loss plot
+    logger = Logger(opt.n_epochs, len(dataloader), opt.epoch)
+
+    #loading resnet18 pretrained
+    resnet18 = models.resnet18(pretrained=True)
+    resnet18.eval().cuda(device_ids[0])
 
     # ##### Training ######
     with torch.autograd.set_detect_anomaly(True):
@@ -328,40 +237,63 @@ def main():
                 real_B = Variable(input_B.copy_(batch['B']))
 
                 ###### Generators A2B and B2A ######
+                netG_A2B.requires_grad_(True)
+                netG_B2A.requires_grad_(True)
+                netD_A.requires_grad_(False)
+                netD_B.requires_grad_(False)
+
                 optimizer_G.zero_grad()
 
                 # Identity loss
                 # G_A2B(B) should equal B if real B is fed
-                same_B = netG_A2B(real_B)
+                with torch.no_grad():
+                    z = resnet18(real_B)
+                same_B = netG_A2B(z.cuda(device_ids[0]))
                 loss_identity_B = criterion_identity(same_B, real_B) * 5.0
                 # G_B2A(A) should equal A if real A is fed
-                same_A = netG_B2A(real_A)
+                with torch.no_grad():
+                    z = resnet18(real_A)
+                same_A = netG_B2A(z.cuda(device_ids[0]))
                 loss_identity_A = criterion_identity(same_A, real_A) * 5.0
 
                 # GAN loss
-                fake_B = netG_A2B(real_A)
-                pred_fake = netD_B(fake_B)
+                with torch.no_grad():
+                    z = resnet18(real_A)
+                fake_B = netG_A2B(z.cuda(device_ids[0]))
+                with torch.no_grad():
+                    pred_fake = netD_B(fake_B)
                 loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
-
-                fake_A = netG_B2A(real_B)
-                pred_fake = netD_A(fake_A)
+                with torch.no_grad():
+                    z = resnet18(real_B)
+                fake_A = netG_B2A(z.cuda(device_ids[0]))
+                with torch.no_grad():
+                    pred_fake = netD_A(fake_A)
                 loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
 
                 # Cycle loss
-                recovered_A = netG_B2A(fake_B)
+                with torch.no_grad():
+                    z = resnet18(fake_B)
+                recovered_A = netG_B2A(z.cuda(device_ids[0]))
                 loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
 
-                recovered_B = netG_A2B(fake_A)
+                with torch.no_grad():
+                    z = resnet18(fake_A)
+                recovered_B = netG_A2B(z.cuda(device_ids[0]))
                 loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
                 # Total loss
                 loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
-                loss_G.backward()
 
+                loss_G.backward()
                 optimizer_G.step()
                 ###################################
 
                 # ##### Discriminator A ######
+                netG_A2B.requires_grad_(False)
+                netG_B2A.requires_grad_(False)
+                netD_A.requires_grad_(True)
+                netD_B.requires_grad_(False)
+
                 optimizer_D_A.zero_grad()
 
                 # Real loss
@@ -370,17 +302,22 @@ def main():
 
                 # Fake loss
                 fake_A = fake_A_buffer.push_and_pop(fake_A)
-                pred_fake = netD_A(fake_A)
+                pred_fake = netD_A(fake_A.detach())
                 loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
 
                 # Total loss
                 loss_D_A = (loss_D_real + loss_D_fake) * 0.5
-                loss_D_A.backward()
 
+                loss_D_A.backward()
                 optimizer_D_A.step()
                 ###################################
 
                 # ##### Discriminator B ######
+                netG_A2B.requires_grad_(False)
+                netG_B2A.requires_grad_(False)
+                netD_A.requires_grad_(False)
+                netD_B.requires_grad_(True)
+
                 optimizer_D_B.zero_grad()
 
                 # Real loss
@@ -389,30 +326,20 @@ def main():
 
                 # Fake loss
                 fake_B = fake_B_buffer.push_and_pop(fake_B)
-                pred_fake = netD_B(fake_B)
+                pred_fake = netD_B(fake_B.detach())
                 loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
 
                 # Total loss
                 loss_D_B = (loss_D_real + loss_D_fake) * 0.5
-                loss_D_B.backward()
 
+                loss_D_B.backward()
                 optimizer_D_B.step()
                 ###################################
 
-                # Progress report (http://localhost:8097)
                 logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
                             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
                             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
                            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
-
-                # print({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
-                #            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                #          'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)})
-                # images = {'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
-                #
-                # image_to_print = real_A
-                # plt.imshow(tensor2image(image_to_print.detach()).transpose((1, 2, 0)))
-                # plt.show()
 
             # Update learning rates
             lr_scheduler_G.step()

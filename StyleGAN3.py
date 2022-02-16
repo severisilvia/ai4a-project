@@ -107,46 +107,7 @@ class FullyConnectedLayer(torch.nn.Module):
     def extra_repr(self):
         return f'in_features={self.in_features:d}, out_features={self.out_features:d}, activation={self.activation:s}'
 
-# ------------------$$$$$$  AGGIUNTA DA NOI   $$$$$$$$--------------------------------
-# Ridurrei un po' la grandezza di questa rete in modo da non avere troppi parametri
 
-class ReduceNet(torch.nn.Module):
-    def __init__(self, out_size: int = 512, dropout: float = 0.5) -> None:
-        super().__init__()
-        self.features = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.MaxPool2d(kernel_size=3, stride=2),
-            torch.nn.Conv2d(64, 192, kernel_size=5, padding=2),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.MaxPool2d(kernel_size=3, stride=2),
-            torch.nn.Conv2d(192, 384, kernel_size=3, padding=1),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(384, 256, kernel_size=3, padding=1),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.MaxPool2d(kernel_size=3, stride=2),
-        )
-        self.avgpool = torch.nn.AdaptiveAvgPool2d((6, 6))
-        self.classifier = torch.nn.Sequential(
-            torch.nn.Dropout(p=dropout),
-            torch.nn.Linear(256 * 6 * 6, 4096),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Dropout(p=dropout),
-            torch.nn.Linear(4096, 4096),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Linear(4096, out_size),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
-        return x
-
-# ------------------$$$$$$  FINE AGGIUNTA DA NOI   $$$$$$$$----------------------------
 
 @persistence.persistent_class
 class MappingNetwork(torch.nn.Module):
@@ -550,13 +511,13 @@ class Generator(torch.nn.Module):
         self.synthesis = SynthesisNetwork(w_dim=w_dim, img_resolution=img_resolution, img_channels=img_channels, **synthesis_kwargs)
         self.num_ws = self.synthesis.num_ws
         self.mapping = MappingNetwork(z_dim=z_dim, c_dim=c_dim, w_dim=w_dim, num_ws=self.num_ws, **mapping_kwargs)
-        self.resnet18= models.resnet18(pretrained=True)
+        #self.resnet18= models.resnet18(pretrained=True)
 
 
-    def forward(self, img_in, c=0, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
-        with torch.no_grad():
-            self.resnet18.eval()
-            z = self.resnet18(img_in).to("cuda")
+    def forward(self, z, c=0, truncation_psi=1, truncation_cutoff=None, update_emas=False, **synthesis_kwargs):
+        # with torch.no_grad():
+        #     self.resnet18.eval()
+        #     z = self.resnet18(img_in).to("cuda")
         #z = self. reduce(img_in)
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff, update_emas=update_emas)
         img = self.synthesis(ws, update_emas=update_emas, **synthesis_kwargs)

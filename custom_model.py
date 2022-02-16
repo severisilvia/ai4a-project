@@ -66,6 +66,9 @@ class custom_model(torch.nn.Module):
         self.netD_A = Discriminator(**D_kwargs, **common_kwargs)
         self.netD_B = Discriminator(**D_kwargs, **common_kwargs)
 
+        self.netD_A = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.netD_A)
+        self.netD_B = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.netD_B)
+
     def initialize_weights(self, first_train):
         if (first_train == True):
             self.netG_A2B.apply(weights_init_normal)
@@ -115,13 +118,13 @@ class custom_model(torch.nn.Module):
         recovered_B = self.netG_A2B.forward(fake_A)
 
         # Real loss
-        pred_realA_DIS = self.netD_A.forward(real_A)
+        pred_realA_DIS = self.netD_A.forward(real_A.detach())
         fake_A = fake_A_buffer.push_and_pop(fake_A)
-        pred_fakeA_DIS = self.netD_A.forward(fake_A)
+        pred_fakeA_DIS = self.netD_A.forward(fake_A.detach())
 
         # Real loss
-        pred_realB_DIS = self.netD_B.forward(real_B)
+        pred_realB_DIS = self.netD_B.forward(real_B.detach())
         fake_B = fake_B_buffer.push_and_pop(fake_B)
-        pred_fakeB_DIS = self.netD_B.forward(fake_B)
+        pred_fakeB_DIS = self.netD_B.forward(fake_B.detach())
 
         return fake_A , fake_B, same_B, same_A, pred_fakeB_GAN, pred_fakeA_GAN, recovered_A, recovered_B, pred_realA_DIS, pred_fakeA_DIS, pred_realB_DIS, pred_fakeB_DIS
