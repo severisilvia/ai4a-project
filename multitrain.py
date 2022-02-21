@@ -59,6 +59,7 @@ def main():
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int,
                         default=3)
     parser.add_argument('--first_train', default=False, action='store_true', help='first training cycle')
+    parser.add_argument('--clip_value', default=5, type=int, help='value used to clip the gradient')
 
     # for distributed training
     parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
@@ -185,6 +186,9 @@ def main():
     fake_A_buffer = ReplayBuffer()
     fake_B_buffer = ReplayBuffer()
 
+    #fix the random seed
+    torch.manual_seed(10)
+
     # Dataset loader
     transforms_ = [transforms.Resize(int(opt.size * 1.12), Image.BICUBIC),
                    transforms.RandomCrop(opt.size),
@@ -285,6 +289,9 @@ def main():
                 loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
 
                 loss_G.backward()
+                torch.nn.utils.clip_grad_norm_(netG_A2B.parameters(), opt.clip_value)
+                torch.nn.utils.clip_grad_norm_(netG_B2A.parameters(), opt.clip_value)
+
                 optimizer_G.step()
                 ###################################
 
@@ -309,6 +316,7 @@ def main():
                 loss_D_A = (loss_D_real + loss_D_fake) * 0.5
 
                 loss_D_A.backward()
+                torch.nn.utils.clip_grad_norm_(netD_A.parameters(), opt.clip_value)
                 optimizer_D_A.step()
                 ###################################
 
@@ -333,6 +341,7 @@ def main():
                 loss_D_B = (loss_D_real + loss_D_fake) * 0.5
 
                 loss_D_B.backward()
+                torch.nn.utils.clip_grad_norm_(netD_B.parameters(), opt.clip_value)
                 optimizer_D_B.step()
                 ###################################
 
@@ -346,12 +355,13 @@ def main():
             lr_scheduler_D_A.step()
             lr_scheduler_D_B.step()
 
-            # Save models checkpoints
+            # Save models checkpoints for test
             torch.save(netG_A2B.state_dict(), 'netG_A2B.pth')
             torch.save(netG_B2A.state_dict(), 'netG_B2A.pth')
             torch.save(netD_A.state_dict(), 'netD_A.pth')
             torch.save(netD_B.state_dict(), 'netD_B.pth')
 
+            # Save models checkpoints for resume the training
             torch.save({"netG_A2B_state_dict": netG_A2B.state_dict(), "epoch": epoch,
                         "optimizer_G_state_dict": optimizer_G.state_dict(), "loss_G": loss_G}, 'output/netG_A2B.pt')
             torch.save({"netG_B2A_state_dict": netG_B2A.state_dict(), "epoch": epoch,

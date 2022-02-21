@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=ai4a
-#SBATCH --output=/homes/sseveri/logs/ai4a_log_16_02_second
-#SBATCH --error=/homes/sseveri/logs/ai4a_log_16_02_second
+#SBATCH --output=/homes/sseveri/logs/ai4a_log_20_02_second
+#SBATCH --error=/homes/sseveri/logs/ai4a_log_20_02_second
 #SBATCH --gres=gpu:2
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-gpu=1
-#SBATCH --mem-per-gpu=20G
+#SBATCH --mem-per-gpu=15G
 #SBATCH --partition=students-prod
 #SBATCH --mail-user=229635@studenti.unimore.it
 #SBATCH --mail-type=ALL
