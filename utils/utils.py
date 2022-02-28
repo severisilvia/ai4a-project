@@ -61,11 +61,11 @@ class Logger():
                 if online_log:
                     wandb.log('%s: %.4f | ' % (loss_name, self.losses[loss_name] / self.batch))
 
-        batches_done = self.batches_epoch * (self.epoch - 1) + self.batch
-        batches_left = self.batches_epoch * (self.n_epochs - self.epoch) + self.batches_epoch - self.batch
-        sys.stdout.write('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
-        if online_log:
-            wandb.log('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
+        # batches_done = self.batches_epoch * (self.epoch - 1) + self.batch
+        # batches_left = self.batches_epoch * (self.n_epochs - self.epoch) + self.batches_epoch - self.batch
+        # sys.stdout.write('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
+        # if online_log:
+        #     wandb.log('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
 
         # Draw images
         for image_name, tensor in images.items():

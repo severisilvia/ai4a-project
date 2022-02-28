@@ -87,30 +87,19 @@ def main():
     netG_B2A = Generator(**G_kwargs, **common_kwargs)
     resnet18 = models.resnet18(pretrained=True)
 
-    print(torch.load(opt.generator_A2B).keys())
-    print(torch.load(opt.generator_B2A).keys())
+    #print(torch.load(opt.generator_A2B).keys())
+    #print(torch.load(opt.generator_B2A).keys())
 
     state_dictG_A2B=torch.load(opt.generator_A2B)
     for key in list(state_dictG_A2B.keys()):
         state_dictG_A2B[key.replace('module.', '')] = state_dictG_A2B.pop(key)
-    print(state_dictG_A2B.keys())
+    #print(state_dictG_A2B.keys())
 
     state_dictG_B2A = torch.load(opt.generator_B2A)
     for key in list(state_dictG_B2A.keys()):
         state_dictG_B2A[key.replace('module.', '')] = state_dictG_B2A.pop(key)
-    print(state_dictG_B2A.keys())
+    #print(state_dictG_B2A.keys())
 
-    # if opt.parallel == True:
-    #     env_dict = {
-    #         key: os.environ[key]
-    #         for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
-    #     }
-    #     print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
-    #     torch.distributed.init_process_group(backend="nccl")
-    #     print(
-    #         f"[{os.getpid()}] world_size = {torch.distributed.get_world_size()}, "
-    #         + f"rank = {torch.distributed.get_rank()}, backend={torch.distributed.get_backend()}"
-    #     )
 
     if opt.cuda:
         device = torch.device('cuda')
@@ -118,9 +107,6 @@ def main():
         netG_B2A.to(device)
         resnet18.to(device)
 
-        # for the correct keys in checkpoint file
-    # netG_A2B = DDP(netG_A2B, device_ids=[0])
-    # netG_B2A = DDP(netG_B2A, device_ids=[0])
 
     # Load state dicts
     print("load state dict")
@@ -188,10 +174,5 @@ def main():
 if __name__ == '__main__':
     my_env = os.environ.copy()
     my_env["PATH"] = "/homes/sseveri/.conda/envs/stylegan3/bin:" + my_env["PATH"]
-    # my_env["MASTER_PORT"] ="8100"
-    # my_env["WORLD_SIZE"]="2"
-    # my_env["LOCAL_RANK"]="0"
-    # my_env["RANK"]="0"
-    # my_env["MASTER_ADDR"]= "aimagelab-srv-00"
     os.environ.update(my_env)
     main()

@@ -34,14 +34,15 @@ def main():
     parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
     parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
-    parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
+    parser.add_argument('--lr_discriminator', type=float, default=0.002, help='initial discriminator learning rate')
+    parser.add_argument('--lr_generator', type=float, default=0.0025, help='initial generator learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
                         help='epoch to start linearly decaying the learning rate to 0')
     parser.add_argument('--size', type=int, default=512, help='size of the data crop (squared assumed)')
     parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
     parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
     parser.add_argument('--cuda', default=True, action='store_true', help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
+    parser.add_argument('--n_cpu', type=int, default=1, help='number of cpu threads to use during batch generation')
 
     #StyleGAN3 parameters
     parser.add_argument('--cfg', help='Base configuration, possible choices: stylegan3-t, stylegan3-r,stylegan2',
@@ -58,7 +59,7 @@ def main():
                         type=int, default=512)
     parser.add_argument('--num_channels', help='Number of channels of the data, so the image.shape[0]', type=int,
                         default=3)
-    parser.add_argument('--first_train', default=False, action='store_true', help='first training cycle')
+    parser.add_argument('--first_train', default=True, action='store_true', help='first training cycle')
     parser.add_argument('--clip_value', default=5, type=int, help='value used to clip the gradient')
 
     # for distributed training
@@ -122,6 +123,7 @@ def main():
         netG_B2A.to(device)
         netD_A.to(device)
         netD_B.to(device)
+        device_ids= list(range(0,1))
 
     if (opt.cuda == True and opt.parallel == True):
         n = torch.cuda.device_count() // opt.local_world_size
@@ -150,15 +152,16 @@ def main():
         netG_A2B = DDP(netG_A2B, device_ids=device_ids, broadcast_buffers=False)
         netG_B2A = DDP(netG_B2A, device_ids=device_ids, broadcast_buffers=False)
 
-    if (opt.first_train == True):
-        #initialize weights
-        netG_A2B.apply(weights_init_normal)
-        netG_B2A.apply(weights_init_normal)
-        netD_A.apply(weights_init_normal)
-        netD_B.apply(weights_init_normal)
+    # if (opt.first_train == True):
+    #     #initialize weights
+    #     netG_A2B.apply(weights_init_normal)
+    #     netG_B2A.apply(weights_init_normal)
+    #     netD_A.apply(weights_init_normal)
+    #     netD_B.apply(weights_init_normal)
 
     # Lossess
-    criterion_GAN = torch.nn.MSELoss()
+    #criterion_GAN = torch.nn.MSELoss()
+    criterion_GAN = torch.nn.Softplus()
     criterion_cycle = torch.nn.L1Loss()
     criterion_identity = torch.nn.L1Loss()
 
@@ -168,9 +171,9 @@ def main():
     #GENERATORE: LR_G=0.0025
 
     # Optimizers & LR schedulers
-    optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=opt.lr, betas=(0.5, 0.999))
-    optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
-    optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
+    optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=opt.lr_generator, betas=(0.5, 0.999))
+    optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr_discriminator, betas=(0.5, 0.999))
+    optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr_discriminator, betas=(0.5, 0.999))
 
     lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G,lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
     lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
@@ -194,7 +197,8 @@ def main():
                    transforms.RandomCrop(opt.size),
                    transforms.RandomHorizontalFlip(),
                    transforms.ToTensor(),
-                   transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])]
+                   transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+                   ]
     dataset = ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True)
 
     if opt.parallel == True:
@@ -250,15 +254,15 @@ def main():
 
                 # Identity loss
                 # G_A2B(B) should equal B if real B is fed
-                with torch.no_grad():
-                    z = resnet18(real_B)
-                same_B = netG_A2B(z.cuda(device_ids[0]))
-                loss_identity_B = criterion_identity(same_B, real_B) * 5.0
-                # G_B2A(A) should equal A if real A is fed
-                with torch.no_grad():
-                    z = resnet18(real_A)
-                same_A = netG_B2A(z.cuda(device_ids[0]))
-                loss_identity_A = criterion_identity(same_A, real_A) * 5.0
+                # with torch.no_grad():
+                #     z = resnet18(real_B)
+                # same_B = netG_A2B(z.cuda(device_ids[0]))
+                # loss_identity_B = criterion_identity(same_B, real_B) * 5.0
+                # # G_B2A(A) should equal A if real A is fed
+                # with torch.no_grad():
+                #     z = resnet18(real_A)
+                # same_A = netG_B2A(z.cuda(device_ids[0]))
+                # loss_identity_A = criterion_identity(same_A, real_A) * 5.0
 
                 # GAN loss
                 with torch.no_grad():
@@ -266,14 +270,15 @@ def main():
                 fake_B = netG_A2B(z.cuda(device_ids[0]))
                 with torch.no_grad():
                     pred_fake = netD_B(fake_B)
-                loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
+                #loss_GAN_A2B = criterion_GAN(pred_fake.view(-1), target_real)
+                loss_GAN_A2B = criterion_GAN(-pred_fake.view(-1)).mean() #-log(sigmoid(pred_fake))
                 with torch.no_grad():
                     z = resnet18(real_B)
                 fake_A = netG_B2A(z.cuda(device_ids[0]))
                 with torch.no_grad():
                     pred_fake = netD_A(fake_A)
-                loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
-
+                #loss_GAN_B2A = criterion_GAN(pred_fake.view(-1), target_real)
+                loss_GAN_B2A = criterion_GAN(-pred_fake.view(-1)).mean() #-log(sigmoid(pred_fake))
                 # Cycle loss
                 with torch.no_grad():
                     z = resnet18(fake_B)
@@ -286,14 +291,15 @@ def main():
                 loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
 
                 # Total loss
-                loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+                #loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+                loss_G= loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
 
                 loss_G.backward()
                 torch.nn.utils.clip_grad_norm_(netG_A2B.parameters(), opt.clip_value)
                 torch.nn.utils.clip_grad_norm_(netG_B2A.parameters(), opt.clip_value)
 
                 optimizer_G.step()
-                ###################################
+                ##################################
 
                 # ##### Discriminator A ######
                 netG_A2B.requires_grad_(False)
@@ -305,12 +311,14 @@ def main():
 
                 # Real loss
                 pred_real = netD_A(real_A)
-                loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
+                #loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
+                loss_D_real = criterion_GAN(-pred_real.view(-1)).mean() #-log(sigmoid(pred_real))
 
                 # Fake loss
                 fake_A = fake_A_buffer.push_and_pop(fake_A)
                 pred_fake = netD_A(fake_A.detach())
-                loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
+                #loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
+                loss_D_fake = criterion_GAN(pred_fake.view(-1)).mean() #-log(1-sigmoid(pred_fake))
 
                 # Total loss
                 loss_D_A = (loss_D_real + loss_D_fake) * 0.5
@@ -330,12 +338,14 @@ def main():
 
                 # Real loss
                 pred_real = netD_B(real_B)
-                loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
+                #loss_D_real = criterion_GAN(pred_real.view(-1), target_real)
+                loss_D_real = criterion_GAN(-pred_real.view(-1)).mean() #-log(sigmoid(pred_real))
 
                 # Fake loss
                 fake_B = fake_B_buffer.push_and_pop(fake_B)
                 pred_fake = netD_B(fake_B.detach())
-                loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
+                #loss_D_fake = criterion_GAN(pred_fake.view(-1), target_fake)
+                loss_D_fake = criterion_GAN(pred_fake.view(-1)).mean() #-log(1-sigmoid(pred_fake))
 
                 # Total loss
                 loss_D_B = (loss_D_real + loss_D_fake) * 0.5
@@ -345,7 +355,7 @@ def main():
                 optimizer_D_B.step()
                 ###################################
 
-                logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B),
+                logger.log({'loss_G': loss_G, #'loss_G_identity': (loss_identity_A + loss_identity_B),
                             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
                             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
                            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
