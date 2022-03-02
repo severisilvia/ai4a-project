@@ -21,7 +21,7 @@ def tensor2image(tensor):
 class Logger():
     def __init__(self, n_epochs, batches_epoch, starting_epoch, opt):
         if opt.online_log:
-            wandb.init(project="ai4a",entity="severisilvia", config=opt)
+            wandb.init(project="ai4a",entity="ai4automotive", config=opt)
         self.viz = Visdom(offline=True, log_to_filename="log.txt")
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
@@ -83,10 +83,10 @@ class Logger():
             else:
                 self.viz.image(tensor2image(tensor.data), win=self.image_windows[image_name],
                                opts={'title': image_name})
-
-        if (self.batch % 20)==0:
-            # Draw images
-            wandb.log({"img0": [wandb.Image(images['real_A'], caption="real_A")],
+        if self.online_log:
+            if (self.batch % 20)==0:
+                # Draw images
+                wandb.log({"img0": [wandb.Image(images['real_A'], caption="real_A")],
                        "img1": [wandb.Image(images['real_B'], caption="real_B")],
                        "img2": [wandb.Image(images['fake_A'], caption="fake_A")],
                        "img3": [wandb.Image(images['fake_B'], caption="fake_B")]})

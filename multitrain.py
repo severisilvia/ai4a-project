@@ -63,7 +63,7 @@ def main():
     parser.add_argument('--clip_value', default=5, type=int, help='value used to clip the gradient')
 
     # for distributed training
-    parser.add_argument('--parallel', default=False, action='store_true', help='use parallel computation')
+    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--local_world_size", type=int, default=1)
     #for the logging
