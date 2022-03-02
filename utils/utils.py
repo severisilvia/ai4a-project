@@ -21,7 +21,7 @@ def tensor2image(tensor):
 class Logger():
     def __init__(self, n_epochs, batches_epoch, starting_epoch, opt):
         if opt.online_log:
-            wandb.init(project="ai4a",entity="ai4automotive", config=opt)
+            wandb.init(project="stylegan3", entity="ai4automotive", config=opt)
         self.viz = Visdom(offline=True, log_to_filename="log.txt")
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch

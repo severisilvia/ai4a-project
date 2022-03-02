@@ -63,7 +63,7 @@ def main():
     parser.add_argument('--clip_value', default=5, type=int, help='value used to clip the gradient')
 
     # for distributed training
-    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
+    parser.add_argument('--parallel', default=False, action='store_true', help='use parallel computation')
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--local_world_size", type=int, default=1)
     #for the logging
@@ -356,12 +356,14 @@ def main():
                 torch.nn.utils.clip_grad_norm_(netD_B.parameters(), opt.clip_value)
                 optimizer_D_B.step()
                 ###################################
-                # if torch.distributed.get_rank()== 0 :
-                #     logger.log({'loss_G': loss_G, #'loss_G_identity': (loss_identity_A + loss_identity_B),
-                #             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                #             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-                #            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
-                logger.log({'loss_G': loss_G,  # 'loss_G_identity': (loss_identity_A + loss_identity_B),
+                if opt.parallel:
+                    if torch.distributed.get_rank()== 0 :
+                        logger.log({'loss_G': loss_G, #'loss_G_identity': (loss_identity_A + loss_identity_B),
+                            'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                            'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+                           images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+                else:
+                    logger.log({'loss_G': loss_G,  # 'loss_G_identity': (loss_identity_A + loss_identity_B),
                             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
                             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
                            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
