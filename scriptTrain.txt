@@ -1,0 +1,17 @@
+srun --partition=students-dev --gres=gpu:1 --pty bash
+conda activate stylegan3
+export MASTER_ADDR="aimagelab-srv-00"
+export MASTER_PORT=8005
+export WORLD_SIZE=2
+export LOCAL_RANK=0
+export RANK=0
+cd ai4a
+
+srun --partition=students-dev --gres=gpu:1 --pty bash
+conda activate stylegan3
+export MASTER_ADDR="aimagelab-srv-00"
+export MASTER_PORT=8005
+export WORLD_SIZE=2
+export LOCAL_RANK=0
+export RANK=1
+cd ai4a

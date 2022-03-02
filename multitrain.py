@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
     parser.add_argument('--dataroot', type=str, default='datasets/day_night', help='root directory of the datasets')
     parser.add_argument('--lr_discriminator', type=float, default=0.002, help='initial discriminator learning rate')
-    parser.add_argument('--lr_generator', type=float, default=0.0025, help='initial generator learning rate')
+    parser.add_argument('--lr_generator', type=float, default=0.007, help='initial generator learning rate')
     parser.add_argument('--decay_epoch', type=int, default=100,
                         help='epoch to start linearly decaying the learning rate to 0')
     parser.add_argument('--size', type=int, default=512, help='size of the data crop (squared assumed)')
@@ -63,9 +63,11 @@ def main():
     parser.add_argument('--clip_value', default=5, type=int, help='value used to clip the gradient')
 
     # for distributed training
-    parser.add_argument('--parallel', default=True, action='store_true', help='use parallel computation')
+    parser.add_argument('--parallel', default=False, action='store_true', help='use parallel computation')
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--local_world_size", type=int, default=1)
+    #for the logging
+    parser.add_argument("--online_log", default=True, action='store_true',help='use wandb logger' )
 
     opt = parser.parse_args()
     print(opt)
@@ -230,7 +232,7 @@ def main():
 
 
     # Loss plot
-    logger = Logger(opt.n_epochs, len(dataloader), opt.epoch)
+    logger = Logger(opt.n_epochs, len(dataloader), opt.epoch, opt)
 
     #loading resnet18 pretrained
     resnet18 = models.resnet18(pretrained=True)
@@ -354,8 +356,12 @@ def main():
                 torch.nn.utils.clip_grad_norm_(netD_B.parameters(), opt.clip_value)
                 optimizer_D_B.step()
                 ###################################
-
-                logger.log({'loss_G': loss_G, #'loss_G_identity': (loss_identity_A + loss_identity_B),
+                # if torch.distributed.get_rank()== 0 :
+                #     logger.log({'loss_G': loss_G, #'loss_G_identity': (loss_identity_A + loss_identity_B),
+                #             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                #             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+                #            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+                logger.log({'loss_G': loss_G,  # 'loss_G_identity': (loss_identity_A + loss_identity_B),
                             'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
                             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
                            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})

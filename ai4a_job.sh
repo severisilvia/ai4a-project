@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=ai4a
-#SBATCH --output=/homes/sseveri/logs/ai4a_log_24_02_second
-#SBATCH --error=/homes/sseveri/logs/ai4a_log_24_02_second
+#SBATCH --output=/homes/sseveri/logs/ai4a_log_01_03_first
+#SBATCH --error=/homes/sseveri/logs/ai4a_log_01_03_first
 #SBATCH --gres=gpu:2
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-gpu=1
