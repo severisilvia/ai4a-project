@@ -21,8 +21,7 @@ def tensor2image(tensor):
 class Logger():
     def __init__(self, n_epochs, batches_epoch, starting_epoch, opt):
         if opt.online_log:
-            wandb.init(project="stylegan3", entity="ai4automotive", config=opt)
-        self.viz = Visdom(offline=True, log_to_filename="log.txt")
+            wandb.init(project="ai4a", entity="ai4automotive", config=opt, name='test-reg')
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
         self.epoch = starting_epoch
@@ -32,7 +31,7 @@ class Logger():
         self.losses = {}
         self.loss_windows = {}
         self.image_windows = {}
-        self.online_log=opt.online_log
+        self.online_log = opt.online_log
 
 
 
@@ -40,49 +39,20 @@ class Logger():
     def log(self, losses=None, images=None):
         self.mean_period += (time.time() - self.prev_time)
         self.prev_time = time.time()
+
         if self.online_log:
             wandb.log(losses)
 
         sys.stdout.write(
             '\rEpoch %03d/%03d [%04d/%04d] -- ' % (self.epoch, self.n_epochs, self.batch, self.batches_epoch))
-        # if self.online_log:
-        #     wandb.log('\rEpoch %03d/%03d [%04d/%04d] -- ' % (self.epoch, self.n_epochs, self.batch, self.batches_epoch))
         for i, loss_name in enumerate(losses.keys()):
-            if loss_name not in self.losses:
-                self.losses[loss_name] = losses[loss_name].item()
-            else:
-                self.losses[loss_name] += losses[loss_name].item()
-
+            self.losses[loss_name] = losses[loss_name].item()
             if (i + 1) == len(losses.keys()):
-                sys.stdout.write('%s: %.4f -- \n' % (loss_name, self.losses[loss_name] / self.batch))
-                # if self.online_log:
-                #     wandb.log('%s: %.4f --\n' % (loss_name, self.losses[loss_name] / self.batch))
+                sys.stdout.write('%s: %.4f -- \n' % (loss_name, self.losses[loss_name]))
             else:
-                sys.stdout.write('%s: %.4f | ' % (loss_name, self.losses[loss_name] / self.batch))
-                # if self.online_log:
-                #     wandb.log('%s: %.4f | ' % (loss_name, self.losses[loss_name] / self.batch))
-
-        # batches_done = self.batches_epoch * (self.epoch - 1) + self.batch
-        # batches_left = self.batches_epoch * (self.n_epochs - self.epoch) + self.batches_epoch - self.batch
-        # sys.stdout.write('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
-        # if online_log:
-        #     wandb.log('ETA: %s' % (datetime.timedelta(seconds=batches_left * self.mean_period / batches_done)))
-
-        # Draw images
-        # wandb.log({"img0": [wandb.Image(images['real_A'] , caption="real_A")],
-        #            "img1": [wandb.Image(images['real_B'] , caption="real_B")],
-        #            "img2": [wandb.Image(images['fake_A'] , caption="fake_A")],
-        #            "img3": [wandb.Image(images['fake_B'] , caption="fake_B")]})
+                sys.stdout.write('%s: %.4f | ' % (loss_name, self.losses[loss_name]))
 
 
-        for image_name, tensor in images.items():
-            # if self.online_log:
-            #     wandb.log({"img0": [wandb.Image(tensor, caption=image_name)]})
-            if image_name not in self.image_windows:
-                self.image_windows[image_name] = self.viz.image(tensor2image(tensor.data), opts={'title': image_name})
-            else:
-                self.viz.image(tensor2image(tensor.data), win=self.image_windows[image_name],
-                               opts={'title': image_name})
         if self.online_log:
             if (self.batch % 20)==0:
                 # Draw images
@@ -93,24 +63,13 @@ class Logger():
 
         # End of epoch
         if (self.batch % self.batches_epoch) == 0:
-            # Plot losses
-            for loss_name, loss in self.losses.items():
-                if loss_name not in self.loss_windows:
-                    self.loss_windows[loss_name] = self.viz.line(X=np.array([self.epoch]),
-                                                                 Y=np.array([loss / self.batch]),
-                                                                 opts={'xlabel': 'epochs', 'ylabel': loss_name,
-                                                                       'title': loss_name})
-                else:
-                    self.viz.line(X=np.array([self.epoch]), Y=np.array([loss / self.batch]),
-                                  win=self.loss_windows[loss_name], update='append')
-                # Reset losses for next epoch
-                self.losses[loss_name] = 0.0
-
             self.epoch += 1
             self.batch = 1
-            sys.stdout.write('\n')
+            sys.stdout.write('--------------FINE EPOCA------------ \n')
         else:
             self.batch += 1
+
+
 
 
 class ReplayBuffer():
