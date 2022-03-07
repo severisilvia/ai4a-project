@@ -21,7 +21,7 @@ def tensor2image(tensor):
 class Logger():
     def __init__(self, n_epochs, batches_epoch, starting_epoch, opt):
         if opt.online_log:
-            wandb.init(project="ai4a", entity="ai4automotive", config=opt, name='test-reg')
+            wandb.init(project="ai4a", entity="ai4automotive", config=opt, name='test-reg-sbatch')
         self.n_epochs = n_epochs
         self.batches_epoch = batches_epoch
         self.epoch = starting_epoch
@@ -56,10 +56,12 @@ class Logger():
         if self.online_log:
             if (self.batch % 20)==0:
                 # Draw images
-                wandb.log({"img0": [wandb.Image(images['real_A'], caption="real_A")],
-                       "img1": [wandb.Image(images['real_B'], caption="real_B")],
-                       "img2": [wandb.Image(images['fake_A'], caption="fake_A")],
-                       "img3": [wandb.Image(images['fake_B'], caption="fake_B")]})
+                wandb.log({"real_A": [wandb.Image(images['real_A'], caption="real_A")],
+                       "real_B": [wandb.Image(images['real_B'], caption="real_B")],
+                       "fake_A": [wandb.Image(images['fake_A'], caption="fake_A")],
+                       "fake_B": [wandb.Image(images['fake_B'], caption="fake_B")],
+                       "recovered_A": [wandb.Image(images['recovered_A'], caption="recovered_A")],
+                       "recovered_B": [wandb.Image(images['recovered_B'], caption="recovered_B")]})
 
         # End of epoch
         if (self.batch % self.batches_epoch) == 0:
