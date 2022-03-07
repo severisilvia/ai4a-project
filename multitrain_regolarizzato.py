@@ -303,10 +303,10 @@ def main():
 
     # Optimizers & LR schedulers
     optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),lr=opt.lr_generator, betas=(0.5, 0.999))
-    # optimizer_G_A2B = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()), lr=opt.lr_generator,
-    #                                betas=(0.5, 0.999))
-    # optimizer_G_B2A = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()), lr=opt.lr_generator,
-    #                                betas=(0.5, 0.999))
+    optimizer_G_A2B = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()), lr=opt.lr_generator,
+                                    betas=(0.5, 0.999))
+    optimizer_G_B2A = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()), lr=opt.lr_generator,
+                                    betas=(0.5, 0.999))
     optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr_discriminator, betas=(0.5, 0.999))
     optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr_discriminator, betas=(0.5, 0.999))
 
@@ -398,20 +398,23 @@ def main():
                 netD_A.requires_grad_(True)
                 netD_B.requires_grad_(False)
 
-                # Fake
+                # Generate
                 with torch.no_grad():
                     z = resnet18(real_B)
                 fake_A = netG_B2A(z.cuda(device_ids[0]))
+
+                #Augment
+                if opt.augment:
+                    real_A_aug, _ = augment(real_A, ada_aug_p)
+                    fake_A, _ = augment(fake_A, ada_aug_p)
+                else:
+                    real_A_aug = real_A
+
+                # Fake
                 pred_fake_D_A = netD_A(fake_A)
 
                 # Real
-                if opt.augment:
-                    real_img_aug, _ = augment(real_A, ada_aug_p)
-                    fake_img, _ = augment(fake_A, ada_aug_p)
-
-                else:
-                    real_A_aug = real_A
-                pred_real_D_A = (real_A_aug)
+                pred_real_D_A = netD_A(real_A_aug)
 
                 # Loss D_A
                 loss_D_A = d_logistic_loss(pred_real_D_A, pred_fake_D_A)
@@ -439,6 +442,7 @@ def main():
 
                     pred_real_D_A = netD_A(real_A_aug)
                     r1_loss = d_r1_loss(pred_real_D_A, real_A)
+                    loss_dict["r1_D_A"] = r1_loss
 
                     netD_A.zero_grad()
                     (opt.r1 / 2 * r1_loss * opt.d_reg_every + 0 * pred_real_D_A[0]).backward()
@@ -451,19 +455,23 @@ def main():
                 netD_A.requires_grad_(False)
                 netD_B.requires_grad_(True)
 
-                # Fake
+                # Generate
                 with torch.no_grad():
                     z = resnet18(real_A)
                 fake_B = netG_A2B(z.cuda(device_ids[0]))
-                pred_fake_D_B = netD_B(fake_B)
 
-                # Real
+                # Augment
                 if opt.augment:
-                    real_img_aug, _ = augment(real_B, ada_aug_p)
-                    fake_img, _ = augment(fake_B, ada_aug_p)
+                    real_B_aug, _ = augment(real_B, ada_aug_p)
+                    fake_B, _ = augment(fake_B, ada_aug_p)
 
                 else:
                     real_B_aug = real_B
+
+                # Fake
+                pred_fake_D_B = netD_B(fake_B)
+
+                # Real
                 pred_real_D_B = netD_B(real_B_aug)
 
                 # Loss D_B
@@ -492,6 +500,7 @@ def main():
 
                     pred_real_D_B = netD_B(real_B_aug)
                     r1_loss = d_r1_loss(pred_real_D_B, real_B)
+                    loss_dict["r1_D_B"] = r1_loss
 
                     netD_B.zero_grad()
                     (opt.r1 / 2 * r1_loss * opt.d_reg_every + 0 * pred_real_D_B[0]).backward()
@@ -510,13 +519,13 @@ def main():
                     z = resnet18(real_B)
                 same_B = netG_A2B(z.cuda(device_ids[0]))
                 loss_identity_B = criterion_identity(same_B, real_B) * 5.0
-                loss_dict["loss_identity_B"] = loss_identity_B
+                loss_dict["loss_identity_A2B"] = loss_identity_B
                 # G_B2A(A) should equal A if real A is fed
                 with torch.no_grad():
                     z = resnet18(real_A)
                 same_A = netG_B2A(z.cuda(device_ids[0]))
                 loss_identity_A = criterion_identity(same_A, real_A) * 5.0
-                loss_dict["loss_identity_A"] = loss_identity_A
+                loss_dict["loss_identity_B2A"] = loss_identity_A
 
 
                 # GAN loss
@@ -538,21 +547,23 @@ def main():
                 images_dict["fake_A"] = fake_A
                 if opt.augment:
                     fake_A, _ = augment(fake_A, ada_aug_p)
+
                 pred_fake_A = netD_A(fake_A)
                 loss_GAN_B2A = g_nonsaturating_loss(pred_fake_A)
                 loss_dict["loss_GAN_B2A"] = loss_GAN_B2A
-
 
                 # Cycle loss
                 with torch.no_grad():
                     z = resnet18(fake_B)
                 recovered_A = netG_B2A(z.cuda(device_ids[0]))
+                images_dict["recovered_A"] = recovered_A
                 loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * 10.0
                 loss_dict["loss_cycle_ABA"] = loss_cycle_ABA
 
                 with torch.no_grad():
                     z = resnet18(fake_A)
                 recovered_B = netG_A2B(z.cuda(device_ids[0]))
+                images_dict["recovered_B"] = recovered_B
                 loss_cycle_BAB = criterion_cycle(recovered_B, real_B) * 10.0
                 loss_dict["loss_cycle_BAB"] = loss_cycle_BAB
 
@@ -568,54 +579,53 @@ def main():
                 ##################################
 
                 # #regolarizziamo G_A2B e G_B2A
-                # g_regularize = i % opt.g_reg_every == 0
-                #
-                # if g_regularize:
-                #     # regolarizziamo G_A2B
-                #     with torch.no_grad():
-                #         z = resnet18(real_B)
-                #     latents = netG_A2B.mapping(z.cuda(device_ids[0]), c=0)
-                #     fake_img = netG_A2B.synthesis(latents)
-                #
-                #     path_loss, mean_path_length, path_lengths = g_path_regularize(
-                #         fake_img, latents, mean_path_length
-                #     )
-                #
-                #     netG_A2B.zero_grad()
-                #     weighted_path_loss_A2B = opt.path_regularize * opt.g_reg_every * path_loss
-                #
-                #     if opt.path_batch_shrink:
-                #         weighted_path_loss_A2B += 0 * fake_img[0, 0, 0, 0]
-                #
-                #     weighted_path_loss_A2B.backward()
-                #
-                #     optimizer_G_A2B.step()
-                #
-                #     # regolarizziamo G_B2A
-                #     with torch.no_grad():
-                #         z = resnet18(real_B)
-                #     latents = netG_B2A.mapping(z.cuda(device_ids[0]), c=0)
-                #     fake_img = netG_B2A.synthesis(latents)
-                #
-                #
-                #     path_loss, mean_path_length, path_lengths = g_path_regularize(
-                #         fake_img, latents, mean_path_length
-                #     )
-                #
-                #
-                #     netG_B2A.zero_grad()
-                #     weighted_path_loss_B2A = opt.path_regularize * opt.g_reg_every * path_loss
-                #
-                #     if opt.path_batch_shrink:
-                #         weighted_path_loss_B2A += 0 * fake_img[0, 0, 0, 0]
-                #
-                #     weighted_path_loss_B2A.backward()
-                #
-                #     optimizer_G_B2A.step()
-                #
+                g_regularize = i % opt.g_reg_every == 0
+
+                if g_regularize:
+
+                    # regolarizziamo G_A2B
+                    with torch.no_grad():
+                        z = resnet18(real_A)
+                    latents_B = netG_A2B.module.mapping(z.cuda(device_ids[0]), c=0)
+                    fake_B = netG_A2B.module.synthesis(latents_B)
+
+                    path_loss, mean_path_length, path_lengths = g_path_regularize(
+                        fake_B, latents_B, mean_path_length
+                    )
+
+                    netG_A2B.zero_grad()
+                    weighted_path_loss_A2B = opt.path_regularize * opt.g_reg_every * path_loss
+
+                    if opt.path_batch_shrink:
+                        weighted_path_loss_A2B += 0 * fake_B[0, 0, 0, 0]
+
+                    weighted_path_loss_A2B.backward()
+
+                    optimizer_G_A2B.step()
+
+                    # regolarizziamo G_B2A
+                    with torch.no_grad():
+                        z = resnet18(real_B)
+                    latents_A = netG_B2A.module.mapping(z.cuda(device_ids[0]), c=0)
+                    fake_A = netG_B2A.module.synthesis(latents_A)
+
+
+                    path_loss, mean_path_length, path_lengths = g_path_regularize(
+                        fake_A, latents_A, mean_path_length
+                    )
+
+
+                    netG_B2A.zero_grad()
+                    weighted_path_loss_B2A = opt.path_regularize * opt.g_reg_every * path_loss
+
+                    if opt.path_batch_shrink:
+                        weighted_path_loss_B2A += 0 * fake_A[0, 0, 0, 0]
+
+                    weighted_path_loss_B2A.backward()
+                    optimizer_G_B2A.step()
 
                 if opt.parallel:
-                    if torch.distributed.get_rank()== 0 :
+                    if torch.distributed.get_rank() == 0:
                         logger.log(losses=loss_dict, images=images_dict)
                 else:
                     logger.log(losses=loss_dict, images=images_dict)
