@@ -1,6 +1,6 @@
 # ai4a-project
 
-![Presentazione AI4A De Vitis  Viglianisi  Severi](https://user-images.githubusercontent.com/62468674/167305450-d5c489c9-0f2c-46fe-93d8-c5838354edb4.gif)
+![Presentazione AI4A De Vitis  Severi  Viglianisi](https://user-images.githubusercontent.com/62468674/180647114-fe8106ba-94a1-46cc-9b4d-ef5644410b90.gif)
 
 ![image](https://user-images.githubusercontent.com/62468674/180646949-10627585-e7ba-4d07-b858-f296077c0f60.png)
 
