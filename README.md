@@ -9,7 +9,7 @@
 
 ![image](https://user-images.githubusercontent.com/62468674/180646969-2a36e8a2-7270-41be-8867-bdb7f3c7f685.png)
 
-
+Authors: De Vitis Erminia, Severi Silvia, Viglianisi Brandon Willy
 
 # Unimore 2021 - AI for Automotive
 # All rights reserved
